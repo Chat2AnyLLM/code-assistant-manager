@@ -1,0 +1,44 @@
+{
+  "name": "aws-knowledge-mcp-server",
+  "display_name": "AWS Knowledge MCP Server",
+  "description": "MCP server providing access to the AWS Knowledge service.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aws/aws-knowledge-mcp-server"
+  },
+  "homepage": "https://github.com/aws/aws-knowledge-mcp-server",
+  "author": {
+    "name": "aws"
+  },
+  "license": "MIT",
+  "categories": ["Knowledge", "Search"],
+  "tags": ["aws", "knowledge", "search"],
+  "installations": {
+    "http": {
+      "type": "http",
+      "url": "https://mcp.deepwiki.com/mcp",
+      "description": "Run deepwiki mcp directly with HTTP",
+      "recommended": true
+    }
+  },
+  "examples": [
+    {
+      "title": "Configure for MCP client",
+      "description": "Example configuration snippet for a client",
+      "prompt": "{\n  \"mcpServers\": {\n    \"aws-knowledge-mcp-server\": {\n      \"command\": \"npx\",\n      \"args\": [\"@modelcontextprotocol/inspector\", \"https://knowledge-mcp.global.api.aws\"],\n      \"env\": {},\n      \"disabled\": false,\n      \"autoApprove\": []\n    }\n  }\n}"
+    }
+  ],
+  "arguments": {},
+  "mcpServers": {
+    "aws-knowledge-mcp-server": {
+      "command": "npx",
+      "args": ["@modelcontextprotocol/inspector", "https://knowledge-mcp.global.api.aws"],
+      "env": {},
+      "disabled": false,
+      "autoApprove": []
+    }
+  },
+  "is_official": false,
+  "is_archived": false,
+  "docker_url": null
+}
