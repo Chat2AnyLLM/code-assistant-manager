@@ -17,7 +17,12 @@ from code_assistant_manager.tools import (
 )
 
 # Module-level typer.Option constants to fix B008 linting errors
-from .options import CONFIG_OPTION, TOOL_ARGS_OPTION
+from .options import (
+    CONFIG_FILE_OPTION,
+    CONFIG_OPTION,
+    TOOL_ARGS_OPTION,
+    VALIDATE_VERBOSE_OPTION,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -164,8 +169,56 @@ def create_editor_subcommands():
 # Create the editor subcommands
 create_editor_subcommands()
 
+# Create a group for config commands
+config_app = typer.Typer(
+    help="Configuration management commands",
+    no_args_is_help=True,
+)
+
 # Add the editor app as a subcommand to the main app
 app.add_typer(editor_app, name="launch")
 app.add_typer(editor_app, name="l", hidden=True)
+# Add the config app as a subcommand to the main app
+app.add_typer(config_app, name="config")
 # Add the MCP app as a subcommand to the main app
 app.add_typer(mcp_app, name="mcp")
+
+
+@config_app.command("validate")
+def validate_config(
+    config: Optional[str] = CONFIG_FILE_OPTION,
+    verbose: bool = VALIDATE_VERBOSE_OPTION,
+):
+    """Validate the configuration file for syntax and semantic errors."""
+    from code_assistant_manager.config import ConfigManager
+    from code_assistant_manager.menu.base import Colors
+
+    try:
+        cm = ConfigManager(config)
+        typer.echo(
+            f"{Colors.GREEN}✓ Configuration file loaded successfully{Colors.RESET}"
+        )
+
+        # Run full validation
+        is_valid, errors = cm.validate_config()
+
+        if is_valid:
+            typer.echo(f"{Colors.GREEN}✓ Configuration validation passed{Colors.RESET}")
+            return 0
+        else:
+            typer.echo(f"{Colors.RED}✗ Configuration validation failed:{Colors.RESET}")
+            for error in errors:
+                typer.echo(f"  - {error}")
+            return 1
+
+    except FileNotFoundError as e:
+        typer.echo(f"{Colors.RED}✗ Configuration file not found: {e}{Colors.RESET}")
+        return 1
+    except ValueError as e:
+        typer.echo(f"{Colors.RED}✗ Configuration validation failed: {e}{Colors.RESET}")
+        return 1
+    except Exception as e:
+        typer.echo(
+            f"{Colors.RED}✗ Unexpected error during validation: {e}{Colors.RESET}"
+        )
+        return 1

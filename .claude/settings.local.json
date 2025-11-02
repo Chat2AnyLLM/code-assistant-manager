@@ -62,7 +62,9 @@
       "Bash(./install.sh:*)",
       "Bash(script --help:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "mcp__serena__think_about_task_adherence",
+      "mcp__serena__read_memory"
     ],
     "additionalDirectories": [
       "/home/jzhu/projects/repos/mcpm.sh",
