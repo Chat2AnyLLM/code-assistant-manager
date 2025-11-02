@@ -20,6 +20,7 @@ from code_assistant_manager.tools import (
 from .options import (
     CONFIG_FILE_OPTION,
     CONFIG_OPTION,
+    DEBUG_OPTION,
     TOOL_ARGS_OPTION,
     VALIDATE_VERBOSE_OPTION,
 )
@@ -32,6 +33,19 @@ app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
 )
+
+
+@app.callback(invoke_without_command=False)
+def global_options(debug: bool = DEBUG_OPTION):
+    """Global options for the CLI application."""
+    if debug:
+        # Configure debug logging for all modules
+        logging.basicConfig(
+            level=logging.DEBUG,
+            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        )
+        logger.debug("Debug logging enabled")
+
 
 # Import commands to register them with the app
 from . import commands  # noqa: F401,E402
