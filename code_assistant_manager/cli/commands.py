@@ -557,7 +557,6 @@ def doctor_alias(
     return doctor(ctx, verbose, config)
 
 
-@app.command("validate")
 def validate_config(
     config: Optional[str] = CONFIG_FILE_OPTION,
     verbose: bool = VALIDATE_VERBOSE_OPTION,
@@ -647,7 +646,7 @@ _code_assistant_manager_completions()
     cword=$COMP_CWORD
 
     # Main commands
-    commands="launch l mcp upgrade u install i doctor d completion comp help --help --version --config --endpoints --debug -d"
+    commands="launch l config mcp upgrade u install i doctor d completion comp help --help --version --config --endpoints --debug -d"
 
     # Tool names for launch command
     tools="claude codex copilot gemini droid qwen codebuddy iflow qodercli zed neovate"
@@ -691,6 +690,10 @@ _code_assistant_manager_completions()
             ;;
         doctor|d)
             COMPREPLY=( $(compgen -W "--verbose -v" -- ${cur}) )
+            return 0
+            ;;
+        config)
+            COMPREPLY=( $(compgen -W "validate" -- ${cur}) )
             return 0
             ;;
         completion|comp)
@@ -760,6 +763,14 @@ _code_assistant_manager_completions()
                 COMPREPLY=( $(compgen -W "--verbose --help" -- ${cur}) )
                 return 0
                 ;;
+            config)
+                case "${COMP_WORDS[2]}" in
+                    validate)
+                        COMPREPLY=( $(compgen -W "--config --help" -- ${cur}) )
+                        return 0
+                        ;;
+                esac
+                ;;
             completion|comp)
                 case "${COMP_WORDS[2]}" in
                     bash|zsh)
@@ -790,6 +801,7 @@ _code_assistant_manager() {
     commands=(
         'launch:Launch AI coding assistants'
         'l:Alias for launch'
+        'config:Configuration management commands'
         'mcp:Manage MCP servers'
         'upgrade:Upgrade CLI tools'
         'u:Alias for upgrade'
@@ -852,6 +864,14 @@ _code_assistant_manager() {
                 launch|l)
                     if (( CURRENT == 3 )); then
                         _describe -t tools 'AI assistant' tools
+                    else
+                        _values 'option' '--help[Show help]'
+                    fi
+                    ;;
+                config)
+                    if (( CURRENT == 3 )); then
+                        _values 'config command' \
+                            'validate[Validate configuration file]'
                     else
                         _values 'option' '--help[Show help]'
                     fi
