@@ -194,8 +194,10 @@ app.add_typer(editor_app, name="launch")
 app.add_typer(editor_app, name="l", hidden=True)
 # Add the config app as a subcommand to the main app
 app.add_typer(config_app, name="config")
+app.add_typer(config_app, name="cf", hidden=True)
 # Add the MCP app as a subcommand to the main app
 app.add_typer(mcp_app, name="mcp")
+app.add_typer(mcp_app, name="m", hidden=True)
 
 
 @config_app.command("validate")
