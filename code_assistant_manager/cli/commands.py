@@ -317,6 +317,12 @@ def version_command():
     raise typer.Exit()
 
 
+@app.command("v", hidden=True)
+def version_alias():
+    """Alias for 'version' command."""
+    return version_command()
+
+
 def install(
     ctx: Context,
     target: str = TARGET_OPTION,
@@ -629,6 +635,12 @@ def completion(shell: str = SHELL_OPTION):
     typer.echo("# Completion script:")
     typer.echo("=" * 50)
     typer.echo(completion_script)
+
+
+@app.command("c", hidden=True)
+def completion_alias_short(shell: str = SHELL_OPTION):
+    """Alias for 'completion' command."""
+    return completion(shell)
 
 
 def generate_completion_script(shell: str) -> str:
