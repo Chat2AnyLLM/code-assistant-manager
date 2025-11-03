@@ -162,7 +162,6 @@ class DroidTool(CLITool):
 
         # Notify user and execute Droid CLI
         print("Starting Factory.ai Droid CLI...")
-        print(f"DEBUG: running: droid {' '.join(args)}\n")
 
         command = ["droid"] + args
         return self._run_tool_with_env(command, env, "droid", interactive=True)

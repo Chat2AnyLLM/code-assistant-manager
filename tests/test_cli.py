@@ -40,10 +40,18 @@ class TestCLIMain:
 
     def test_cli_version(self):
         """Test CLI version output."""
-        with patch("sys.argv", ["code-assistant-manager", "version"]):
-            with pytest.raises(SystemExit) as exc_info:
-                app()
-            assert exc_info.value.code == 0
+        import io
+        from contextlib import redirect_stdout
+
+        captured_output = io.StringIO()
+        with redirect_stdout(captured_output):
+            with patch("sys.argv", ["code-assistant-manager", "version"]):
+                with pytest.raises(SystemExit) as exc_info:
+                    app()
+                assert exc_info.value.code == 0
+
+        version_output = captured_output.getvalue()
+        assert "1.0.3" in version_output, "Version command should output 1.0.3"
 
     def test_cli_no_arguments(self):
         """Test CLI with no arguments."""

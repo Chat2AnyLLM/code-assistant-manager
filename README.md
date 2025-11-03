@@ -43,7 +43,7 @@ Entrypoints and CLI flow
 
 - Console scripts: `code-assistant-manager` and `cam` map to code_assistant_manager.cli:main (pyproject.toml and setup.py).
 
-- The CLI is implemented with Typer (click-based). Subcommands include `launch` (interactive menu or per-tool commands), `mcp` (MCP server management), `upgrade`/`install` (tool installers), `doctor` (diagnostics), `completion` (generate shell completion script).
+- The CLI is implemented with Typer (click-based). Subcommands include `launch` (interactive menu or per-tool commands), `version` (show version information), `mcp` (MCP server management), `upgrade`/`install` (tool installers), `doctor` (diagnostics), `completion` (generate shell completion script).
 
 - `cli.py` also contains compatibility code that allows `code-assistant-manager <tool>` direct invocation and a legacy `main()` wrapper for backward compatibility.
 

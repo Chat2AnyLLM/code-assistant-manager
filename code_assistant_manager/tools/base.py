@@ -102,7 +102,16 @@ class CLITool:
         try:
             logger.debug(f"Executing command: {' '.join(command)}")
             if interactive:
-                result = subprocess.run(command, env=env)
+
+                import sys
+
+                result = subprocess.run(
+                    command,
+                    env=env,
+                    stdin=sys.stdin,
+                    stdout=sys.stdout,
+                    stderr=sys.stderr,
+                )
             else:
                 result = subprocess.run(
                     command, env=env, capture_output=True, text=True
