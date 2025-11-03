@@ -238,3 +238,76 @@ def validate_config(
             f"{Colors.RED}✗ Unexpected error during validation: {e}{Colors.RESET}"
         )
         return 1
+
+
+@config_app.command("list", short_help="List all configuration file locations")
+def list_config():
+    """List all configuration file locations including CAM config and editor client configs."""
+    from pathlib import Path
+
+    from code_assistant_manager.menu.base import Colors
+
+    typer.echo(f"\n{Colors.BOLD}Configuration Files:{Colors.RESET}\n")
+
+    # CAM's own configuration
+    typer.echo(f"{Colors.CYAN}Code Assistant Manager (CAM):{Colors.RESET}")
+    home = Path.home()
+    cam_config_locations = [
+        home / ".config" / "code-assistant-manager" / "settings.json",
+        Path.cwd() / "settings.json",
+        home / "settings.json",
+    ]
+    for path in cam_config_locations:
+        status = f"{Colors.GREEN}✓{Colors.RESET}" if path.exists() else " "
+        typer.echo(f"  {status} {path}")
+
+    # Editor client configurations
+    typer.echo(f"\n{Colors.CYAN}Editor Client Configurations:{Colors.RESET}")
+
+    # Define config locations for each editor
+    editor_configs = {
+        "claude": [
+            home / ".claude.json",
+            Path.cwd() / ".mcp.json",
+        ],
+        "cursor": [
+            home / ".cursor" / "mcp.json",
+        ],
+        "gemini": [
+            home / ".gemini" / "settings.json",
+            Path.cwd() / ".gemini" / "settings.json",
+        ],
+        "copilot": [
+            home / ".copilot" / "mcp-config.json",
+            home / ".copilot" / "mcp.json",
+        ],
+        "codex": [
+            home / ".codex" / "mcp.json",
+        ],
+        "qwen": [
+            home / ".qwen" / "settings.json",
+        ],
+        "codebuddy": [
+            home / ".codebuddy.json",
+            Path.cwd() / ".codebuddy" / "mcp.json",
+        ],
+        "crush": [
+            home / ".config" / "crush" / "crush.json",
+        ],
+        "droid": [
+            home / ".factory" / "mcp.json",
+        ],
+    }
+
+    for editor, paths in editor_configs.items():
+        typer.echo(f"\n  {Colors.BOLD}{editor.capitalize()}:{Colors.RESET}")
+        for path in paths:
+            status = f"{Colors.GREEN}✓{Colors.RESET}" if path.exists() else " "
+            typer.echo(f"    {status} {path}")
+
+    typer.echo()
+
+
+# Add list as shorthand commands
+config_app.command(name="ls", hidden=True)(list_config)
+config_app.command(name="l", hidden=True)(list_config)
