@@ -268,10 +268,8 @@ def list_config():
     editor_configs = {
         "claude": [
             home / ".claude" / "settings.json",
-            home / ".claude" / "settings.local.json",
             Path.cwd() / ".claude" / "settings.json",
             Path.cwd() / ".claude" / "settings.local.json",
-            home / ".claude.json",
             Path.cwd() / ".mcp.json",
         ],
         "cursor": [
