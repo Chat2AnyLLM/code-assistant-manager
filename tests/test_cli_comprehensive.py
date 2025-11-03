@@ -37,15 +37,23 @@ class TestMainCommands:
         assert "install" in help_output
         assert "doctor" in help_output
         assert "uninstall" in help_output
-        assert "validate" in help_output
+        assert "config" in help_output
         assert "completion" in help_output
 
     def test_version_command(self):
         """Test version command displays version info."""
-        with patch("sys.argv", ["code-assistant-manager", "version"]):
-            with pytest.raises(SystemExit) as exc_info:
-                app()
-            assert exc_info.value.code == 0
+        import io
+        from contextlib import redirect_stdout
+
+        captured_output = io.StringIO()
+        with redirect_stdout(captured_output):
+            with patch("sys.argv", ["code-assistant-manager", "version"]):
+                with pytest.raises(SystemExit) as exc_info:
+                    app()
+                assert exc_info.value.code == 0
+
+        version_output = captured_output.getvalue()
+        assert "1.0.3" in version_output, "Version output should contain version 1.0.3"
 
     def test_no_command_shows_help(self):
         """Test that running with no command shows help."""
@@ -628,7 +636,9 @@ class TestValidateCommand:
 
     def test_validate_help(self):
         """Test validate command help."""
-        with patch("sys.argv", ["code-assistant-manager", "validate", "--help"]):
+        with patch(
+            "sys.argv", ["code-assistant-manager", "config", "validate", "--help"]
+        ):
             with pytest.raises(SystemExit) as exc_info:
                 main()
             assert exc_info.value.code == 0
@@ -636,7 +646,8 @@ class TestValidateCommand:
     def test_validate_config_success(self, temp_config):
         """Test validating valid config."""
         with patch(
-            "sys.argv", ["code-assistant-manager", "validate", "--config", temp_config]
+            "sys.argv",
+            ["code-assistant-manager", "config", "validate", "--config", temp_config],
         ):
             with pytest.raises(SystemExit) as exc_info:
                 main()
@@ -648,6 +659,7 @@ class TestValidateCommand:
             "sys.argv",
             [
                 "code-assistant-manager",
+                "config",
                 "validate",
                 "--config",
                 "/nonexistent/path/config.json",
@@ -667,6 +679,7 @@ class TestValidateCommand:
             "sys.argv",
             [
                 "code-assistant-manager",
+                "config",
                 "validate",
                 "--config",
                 temp_config,
@@ -895,7 +908,7 @@ class TestCommandCombinations:
             ["code-assistant-manager", "install", "--help"],
             ["code-assistant-manager", "uninstall", "--help"],
             ["code-assistant-manager", "doctor", "--help"],
-            ["code-assistant-manager", "validate", "--help"],
+            ["code-assistant-manager", "config", "--help"],
             ["code-assistant-manager", "completion", "--help"],
             ["code-assistant-manager", "mcp", "--help"],
         ]
