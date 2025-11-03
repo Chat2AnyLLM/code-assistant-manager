@@ -303,7 +303,7 @@ def list_config():
         "codex": {
             "description": "OpenAI Codex CLI",
             "paths": [
-                home / ".codex" / "mcp.json",
+                home / ".codex" / "config.toml",
             ],
         },
         "qwen": {
