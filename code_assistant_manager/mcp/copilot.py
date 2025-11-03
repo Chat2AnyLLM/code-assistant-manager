@@ -87,6 +87,7 @@ class CopilotMCPClient(MCPClient):
             config = {
                 "type": "http",
                 "url": server_config.url,
+                "tools": ["*"],
             }
             if hasattr(server_config, "headers") and server_config.headers:
                 config["headers"] = server_config.headers
@@ -208,6 +209,18 @@ class CopilotMCPClient(MCPClient):
 
     def _convert_to_copilot_format(self, server_info: dict) -> dict:
         """Convert global server config to Copilot mcpServers format."""
+        # Check if this is an HTTP/remote server
+        if "url" in server_info and server_info.get("type") == "http":
+            copilot_format = {
+                "type": "http",
+                "url": server_info["url"],
+                "tools": ["*"],
+            }
+            if "headers" in server_info:
+                copilot_format["headers"] = server_info["headers"]
+            return copilot_format
+
+        # Otherwise handle as local/stdio server
         # Start with the stdio format conversion
         stdio_format = self._convert_server_to_stdio_format(server_info)
 
