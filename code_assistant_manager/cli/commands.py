@@ -313,7 +313,9 @@ def uninstall_command(
 @app.command("version")
 def version_command():
     """Show version information."""
-    typer.echo("code-assistant-manager version 1.0.0")
+    from code_assistant_manager import __version__
+
+    typer.echo(f"code-assistant-manager version {__version__}")
     raise typer.Exit()
 
 
