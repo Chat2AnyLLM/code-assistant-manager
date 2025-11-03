@@ -267,10 +267,13 @@ def list_config():
     # Define config locations for each editor
     editor_configs = {
         "claude": [
+            home / ".claude.json",
             home / ".claude" / "settings.json",
+            home / ".claude" / "settings.local.json",
             Path.cwd() / ".claude" / "settings.json",
             Path.cwd() / ".claude" / "settings.local.json",
-            Path.cwd() / ".mcp.json",
+            Path.cwd() / ".claude" / "mcp.json",
+            Path.cwd() / ".claude" / "mcp.local.json",
         ],
         "cursor": [
             home / ".cursor" / "mcp.json",
