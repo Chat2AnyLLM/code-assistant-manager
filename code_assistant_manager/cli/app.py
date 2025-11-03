@@ -264,48 +264,105 @@ def list_config():
     # Editor client configurations
     typer.echo(f"\n{Colors.CYAN}Editor Client Configurations:{Colors.RESET}")
 
-    # Define config locations for each editor
+    # Define config locations for each editor with descriptions
     editor_configs = {
-        "claude": [
-            home / ".claude.json",
-            home / ".claude" / "settings.json",
-            home / ".claude" / "settings.local.json",
-            Path.cwd() / ".claude" / "settings.json",
-            Path.cwd() / ".claude" / "settings.local.json",
-            Path.cwd() / ".claude" / "mcp.json",
-            Path.cwd() / ".claude" / "mcp.local.json",
-        ],
-        "cursor": [
-            home / ".cursor" / "mcp.json",
-        ],
-        "gemini": [
-            home / ".gemini" / "settings.json",
-            Path.cwd() / ".gemini" / "settings.json",
-        ],
-        "copilot": [
-            home / ".copilot" / "mcp-config.json",
-            home / ".copilot" / "mcp.json",
-        ],
-        "codex": [
-            home / ".codex" / "mcp.json",
-        ],
-        "qwen": [
-            home / ".qwen" / "settings.json",
-        ],
-        "codebuddy": [
-            home / ".codebuddy.json",
-            Path.cwd() / ".codebuddy" / "mcp.json",
-        ],
-        "crush": [
-            home / ".config" / "crush" / "crush.json",
-        ],
-        "droid": [
-            home / ".factory" / "mcp.json",
-        ],
+        "claude": {
+            "description": "Claude Code Editor",
+            "paths": [
+                home / ".claude.json",
+                home / ".claude" / "settings.json",
+                home / ".claude" / "settings.local.json",
+                Path.cwd() / ".claude" / "settings.json",
+                Path.cwd() / ".claude" / "settings.local.json",
+                Path.cwd() / ".claude" / "mcp.json",
+                Path.cwd() / ".claude" / "mcp.local.json",
+            ],
+        },
+        "cursor-agent": {
+            "description": "Cursor AI Code Editor",
+            "paths": [
+                home / ".cursor" / "mcp.json",
+                home / ".cursor" / "settings.json",
+                Path.cwd() / ".cursor" / "mcp.json",
+            ],
+        },
+        "gemini": {
+            "description": "Google Gemini CLI",
+            "paths": [
+                home / ".gemini" / "settings.json",
+                Path.cwd() / ".gemini" / "settings.json",
+            ],
+        },
+        "copilot": {
+            "description": "GitHub Copilot CLI",
+            "paths": [
+                home / ".copilot" / "mcp-config.json",
+                home / ".copilot" / "mcp.json",
+            ],
+        },
+        "codex": {
+            "description": "OpenAI Codex CLI",
+            "paths": [
+                home / ".codex" / "mcp.json",
+            ],
+        },
+        "qwen": {
+            "description": "Qwen Code CLI",
+            "paths": [
+                home / ".qwen" / "settings.json",
+            ],
+        },
+        "codebuddy": {
+            "description": "Tencent CodeBuddy CLI",
+            "paths": [
+                home / ".codebuddy.json",
+                Path.cwd() / ".codebuddy" / "mcp.json",
+            ],
+        },
+        "crush": {
+            "description": "Charmland Crush CLI",
+            "paths": [
+                home / ".config" / "crush" / "crush.json",
+            ],
+        },
+        "droid": {
+            "description": "Factory.ai Droid CLI",
+            "paths": [
+                home / ".factory" / "mcp.json",
+                home / ".factory" / "config.json",
+            ],
+        },
+        "iflow": {
+            "description": "iFlow CLI",
+            "paths": [
+                home / ".iflow" / "settings.json",
+                home / ".iflow" / "config.json",
+            ],
+        },
+        "neovate": {
+            "description": "Neovate Code CLI",
+            "paths": [
+                home / ".neovate" / "config.json",
+            ],
+        },
+        "qodercli": {
+            "description": "Qoder CLI",
+            "paths": [
+                home / ".qodercli" / "config.json",
+            ],
+        },
+        "zed": {
+            "description": "Zed Editor",
+            "paths": [
+                home / ".config" / "zed" / "settings.json",
+            ],
+        },
     }
 
-    for editor, paths in editor_configs.items():
-        typer.echo(f"\n  {Colors.BOLD}{editor.capitalize()}:{Colors.RESET}")
+    for editor, config_info in editor_configs.items():
+        description = config_info.get("description", editor.capitalize())
+        paths = config_info.get("paths", [])
+        typer.echo(f"\n  {Colors.BOLD}{description} ({editor}):{Colors.RESET}")
         for path in paths:
             status = f"{Colors.GREEN}✓{Colors.RESET}" if path.exists() else " "
             typer.echo(f"    {status} {path}")
