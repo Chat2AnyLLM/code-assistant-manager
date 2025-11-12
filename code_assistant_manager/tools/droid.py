@@ -63,7 +63,7 @@ class DroidTool(CLITool):
         )
         if success and model:
             display_name = f"{model} [{endpoint_name}]"
-            return f"{display_name}|{endpoint_config['endpoint']}|{endpoint_config['actual_api_key']}|generic-chat-completion-api|128000"
+            return f"{display_name}|{endpoint_config['endpoint']}|{endpoint_config['actual_api_key']}|generic-chat-completion-api|65536"
         else:
             print(f"Skipped {endpoint_name}\n")
             return None
