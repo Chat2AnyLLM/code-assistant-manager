@@ -19,7 +19,7 @@ from code_assistant_manager.tools.endpoint_display import (
 def main():
     """Test the endpoint display functionality."""
     # Use the example configuration file
-    config_path = project_root / "settings.json.example"
+    config_path = project_root / "providers.json"
 
     if not config_path.exists():
         print(f"Configuration file not found: {config_path}")

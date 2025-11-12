@@ -57,7 +57,7 @@ Used for command-line argument parsing.
 ### Classes
 
 #### `ConfigManager`
-Manages settings.json file parsing and endpoint configuration.
+Manages providers.json file parsing and endpoint configuration.
 
 **Constructor:**
 ```python
@@ -65,7 +65,7 @@ ConfigManager(config_path: Optional[str] = None)
 ```
 
 **Parameters:**
-- `config_path` (str, optional): Path to settings.json. If None, looks for it in standard locations.
+- `config_path` (str, optional): Path to providers.json. If None, looks for it in standard locations.
 
 **Methods:**
 

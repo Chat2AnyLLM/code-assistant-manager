@@ -16,7 +16,7 @@ DEFAULT_MCPS=(
     "serena"
     "terraform"
     "deepwiki"
-    "awslabs-aws-documentation-mcp-server"
+    "awslabs.aws-documentation-mcp-server"
     "wikipedia-mcp"
     "aws-knowledge-mcp-server"
 )

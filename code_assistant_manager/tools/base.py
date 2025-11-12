@@ -144,7 +144,8 @@ class CLITool:
         1. Try `<command> --version`
         2. Try `<command> -v`
         3. Try `<command> version`
-        Returns first non-empty line of stdout or stderr on success, else 'unknown'.
+        Returns full output from stdout or stderr on success, else 'unknown'.
+        Note: Callers should use _format_version() to clean and extract version from output.
         """
         cmd = command or self.command_name
         if not cmd:
@@ -161,8 +162,8 @@ class CLITool:
                     if res.returncode == 0:
                         output = (res.stdout or res.stderr).strip()
                         if output:
-                            # Use first line to keep display concise
-                            return output.splitlines()[0]
+                            # Return full output, let _format_version() clean it up
+                            return output
                 except subprocess.CalledProcessError:
                     continue
             return "unknown"

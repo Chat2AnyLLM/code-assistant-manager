@@ -168,9 +168,28 @@ setup_config() {
 
     mkdir -p ~/.config/code-assistant-manager
 
-    if [ -f "code_assistant_manager/settings.json.example" ]; then
-        cp code_assistant_manager/settings.json.example ~/.config/code-assistant-manager/settings.json
-        print_success "Created settings.json"
+    # Try to find config files from local dir or installed package
+    local pkg_dir=""
+    if [ -d "code_assistant_manager" ]; then
+        pkg_dir="code_assistant_manager"
+    else
+        # Try to find from installed package
+        pkg_dir=$(python3 -c "import code_assistant_manager; import os; print(os.path.dirname(code_assistant_manager.__file__))" 2>/dev/null || echo "")
+    fi
+
+    if [ -n "$pkg_dir" ] && [ -f "$pkg_dir/providers.json" ]; then
+        cp "$pkg_dir/providers.json" ~/.config/code-assistant-manager/providers.json
+        print_success "Created providers.json"
+    fi
+
+    # Initialize skill_repos.json with built-in repos
+    if [ -n "$pkg_dir" ] && [ -f "$pkg_dir/skill_repos.json" ]; then
+        if [ ! -f ~/.config/code-assistant-manager/skill_repos.json ]; then
+            cp "$pkg_dir/skill_repos.json" ~/.config/code-assistant-manager/skill_repos.json
+            print_success "Created skill_repos.json with default repositories"
+        else
+            print_info "skill_repos.json already exists, skipping"
+        fi
     fi
 
     if [ ! -f ~/.env ]; then

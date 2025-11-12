@@ -6,8 +6,8 @@ Successfully refactored Code Assistant Manager configuration from INI format to 
 ## Changes Made
 
 ### 1. Created New Configuration Files
-- ✅ `settings.json` - Main configuration file in JSON format
-- ✅ `settings.json.example` - Example configuration with detailed comments
+- ✅ `providers.json` - Main configuration file in JSON format
+- ✅ `code_assistant_manager/providers.json` - Bundled fallback copy with detailed comments
 
 ### 2. Updated Python Code
 - ✅ Modified `code_assistant_manager/config.py`:
@@ -54,19 +54,19 @@ All configuration tests pass successfully.
 ## Migration Path
 
 Old `.conf` files are no longer used. Users should:
-1. Copy `settings.json.example` to `settings.json`
+1. Copy `providers.json` to their preferred configuration location
 2. Transfer their settings from old `.conf` file
 3. Remove old `.conf` files to avoid confusion
 
 The system automatically looks for files in this order:
-1. `settings.json` (in project directory)
-2. `~/.config/code-assistant-manager/settings.json`
-3. `settings.json.example` (fallback)
+1. `providers.json` (in project directory)
+2. `~/.config/code-assistant-manager/providers.json`
+3. `code_assistant_manager/providers.json` (fallback)
 
 ## Next Steps
 
 Users should:
-- [ ] Migrate their personal `settings.conf` to `settings.json`
-- [ ] Review `settings.json.example` for reference
+- [ ] Migrate their personal `settings.conf` to `providers.json`
+- [ ] Review `providers.json` for reference
 - [ ] Read `docs/CONFIG_MIGRATION.md` for detailed migration guide
 - [ ] Delete old `.conf` files after successful migration

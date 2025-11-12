@@ -135,8 +135,8 @@ cam --version
 Create basic configuration files:
 
 ```bash
-# Create settings.json (copy from example)
-cp code_assistant_manager/settings.json.example ~/.config/code-assistant-manager/settings.json
+# Create providers.json (copy from template)
+cp code_assistant_manager/providers.json ~/.config/code-assistant-manager/providers.json
 
 # Create .env file for API keys
 touch ~/.env
@@ -380,7 +380,7 @@ pip install code-assistant-manager
 
 After successful installation:
 
-1. **Configure Endpoints**: Set up your AI service endpoints in `settings.json`
+1. **Configure Endpoints**: Set up your AI service endpoints in `providers.json`
 2. **Add API Keys**: Configure your API keys in `.env` file
 3. **Test Integration**: Run `code-assistant-manager doctor` to verify setup
 4. **Explore Features**: Try `code-assistant-manager --help` to see all options

@@ -28,13 +28,13 @@ cam launch codex
 
 配置
 
-1) settings.json — 端点配置（查找顺序：当前目录、~/.config/code-assistant-manager/、包内默认）
+1) providers.json — 端点配置（查找顺序：当前目录、~/.config/code-assistant-manager/、包内默认）
 2) .env — 存放 API 密钥等环境变量（不要提交到版本控制）
 3) tools.yaml — 工具/提供者定义
 
 详细安装请参见 INSTALL.md。
 
-示例 settings.json 片段
+示例 providers.json 片段
 
 {
   "common": { "http_proxy": "http://proxy.corp:3128/", "cache_ttl_seconds": 86400 },

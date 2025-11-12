@@ -150,7 +150,7 @@ from code_assistant_manager.config import ConfigManager
 
 def test_config_loading(tmp_path):
     """Test configuration file loading."""
-    config_file = tmp_path / "settings.json"
+    config_file = tmp_path / "providers.json"
     config_file.write_text('{"endpoints": {}}')
 
     config = ConfigManager(str(config_file))
@@ -232,7 +232,7 @@ This project welcomes AI-assisted contributions. Please follow these additional 
    rm -rf dist/*
    ./install.sh uninstall
    ./install.sh
-   cp ~/.config/code-assistant-manager/settings.json.bak ~/.config/code-assistant-manager/settings.json
+   cp ~/.config/code-assistant-manager/providers.json.bak ~/.config/code-assistant-manager/providers.json
    ```
 
 ### Attribution

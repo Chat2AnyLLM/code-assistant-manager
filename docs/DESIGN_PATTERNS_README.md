@@ -212,7 +212,7 @@ from pathlib import Path
 
 # Create repositories
 config_repo = JsonConfigRepository(
-    file_path=Path('settings.json'),
+    file_path=Path('providers.json'),
     env_resolver=resolve_api_key_function
 )
 

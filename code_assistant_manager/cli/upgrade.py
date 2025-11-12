@@ -80,11 +80,33 @@ def handle_upgrade_command(
         m = re.search(r"\d+\.\d+(?:\.\d+)?(?:[-+][\w\.]+)?", str(s))
         return m.group(0) if m else ""
 
+    def _format_version(value) -> str:
+        import re
+
+        if value is None:
+            return "unknown"
+        text = str(value).strip()
+        if not text:
+            return "unknown"
+        # Remove ANSI escape codes
+        ansi_escape = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
+        text = ansi_escape.sub("", text)
+        # Remove spinner/braille characters (used by some CLIs for progress indication)
+        spinner_pattern = re.compile(r"[\u2800-\u28FF]")
+        text = spinner_pattern.sub("", text)
+        # Take the last non-empty line (version is typically at the end)
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        if not lines:
+            return "unknown"
+        text = lines[-1]
+        return text or "unknown"
+
     # Track tools that we skipped via pre-check
     precheck_skipped = {}
 
     # Exclude MCP from upgradeable tools since it's now a subcommand
     upgradeable_tools = {k: v for k, v in registered_tools.items() if k != "mcp"}
+    status_by_tool = {name: "pending" for name in upgradeable_tools}
 
     if target == "all":
         # Minimize output in test mode to avoid filling pytest capture buffers
@@ -99,7 +121,7 @@ def handle_upgrade_command(
                 version = tool_instance._get_version()
             except Exception:
                 version = "unknown"
-            pre_versions[tool_name] = version
+            pre_versions[tool_name] = _format_version(version)
         success_count = 0
         total_count = 0
         actual_upgrades = 0
@@ -125,6 +147,7 @@ def handle_upgrade_command(
             # Get install command from registry
             install_cmd = TOOL_REGISTRY.get_install_command(tool_key)
             if not install_cmd:
+                status_by_tool[tool_name] = "no-command"
                 # typer.echo(f"{Colors.YELLOW}No upgrade command found for {tool_name}{Colors.RESET}")
                 continue
 
@@ -142,9 +165,11 @@ def handle_upgrade_command(
                     current_v_raw = tool._get_version()
                 except Exception:
                     current_v_raw = "unknown"
+                current_v_display = _format_version(current_v_raw)
                 current_v = _extract_semver(current_v_raw)
                 latest_v = _get_latest_npm_version(pkg_name)
                 latest_v_clean = _extract_semver(latest_v)
+                latest_v_display = _format_version(latest_v)
 
                 if current_v and latest_v_clean and current_v == latest_v_clean:
                     # typer.echo(f"  {tool_name}: {Colors.YELLOW}No upgrade available (installed: {current_v}){Colors.RESET}")
@@ -152,9 +177,10 @@ def handle_upgrade_command(
                     if "precheck_skipped" not in locals():
                         precheck_skipped = {}
                     precheck_skipped[tool_name] = {
-                        "current": current_v,
-                        "latest": latest_v_clean,
+                        "current": current_v_display,
+                        "latest": latest_v_display,
                     }
+                    status_by_tool[tool_name] = "skipped"
                     prepared_tools.append(
                         (tool_name, "skipped", None)
                     )  # Track as prepared but skipped
@@ -261,7 +287,7 @@ def handle_upgrade_command(
             # Display results for ALL upgradeable tools, including ones skipped by pre-check
             typer.echo(f"\n{Colors.GREEN}Upgrade results:{Colors.RESET}")
             for tool_name in upgradeable_tools.keys():
-                before_v = pre_versions.get(tool_name, "unknown")
+                before_v = _format_version(pre_versions.get(tool_name, "unknown"))
 
                 # If precheck indicated skip due to already latest
                 if tool_name in precheck_skipped:
@@ -271,6 +297,7 @@ def handle_upgrade_command(
                     typer.echo(
                         f"  {tool_name}: {Colors.YELLOW}✓ No upgrade (version unchanged){Colors.RESET} {Colors.BLUE}({current}){Colors.RESET}"
                     )
+                    status_by_tool[tool_name] = "skipped"
                     continue
 
                 # If tool had no install command (we decremented total_count earlier), report accordingly
@@ -289,6 +316,7 @@ def handle_upgrade_command(
                     typer.echo(
                         f"  {tool_name}: {Colors.YELLOW}No upgrade command available{Colors.RESET}"
                     )
+                    status_by_tool[tool_name] = "no-command"
                     continue
 
                 # If tool was part of the executed results
@@ -297,35 +325,37 @@ def handle_upgrade_command(
                     success = bool(result_data.get("success"))
                     # Attempt post-upgrade version
                     try:
-                        post_version = upgradeable_tools[tool_name](
+                        post_version_raw = upgradeable_tools[tool_name](
                             config
                         )._get_version()
                     except Exception:
-                        post_version = "unknown"
+                        post_version_raw = "unknown"
+                    post_version = _format_version(post_version_raw)
 
                     try:
-                        same_version = (
-                            str(before_v).strip() == str(post_version).strip()
-                        )
+                        same_version = before_v == post_version
                     except Exception:
                         same_version = False
 
                     if same_version:
                         if success:
+                            status_by_tool[tool_name] = "no-change"
                             typer.echo(
                                 f"  {tool_name}: {Colors.YELLOW}✓ No upgrade (version unchanged){Colors.RESET} {Colors.BLUE}({before_v}){Colors.RESET}"
                             )
                         else:
+                            status_by_tool[tool_name] = "failed"
                             typer.echo(
                                 f"  {tool_name}: {Colors.RED}✗ Failed during upgrade{Colors.RESET} {Colors.BLUE}({before_v} -> {post_version}){Colors.RESET}"
                             )
                     else:
                         if success:
-                            actual_upgrades += 1
+                            status_by_tool[tool_name] = "upgraded"
                             typer.echo(
                                 f"  {tool_name}: {Colors.GREEN}✓ Upgraded{Colors.RESET} {Colors.BLUE}({before_v} -> {post_version}){Colors.RESET}"
                             )
                         else:
+                            status_by_tool[tool_name] = "failed"
                             typer.echo(
                                 f"  {tool_name}: {Colors.RED}✗ Failed{Colors.RESET} {Colors.BLUE}({before_v} -> {post_version}){Colors.RESET}"
                             )
@@ -334,8 +364,13 @@ def handle_upgrade_command(
                     typer.echo(
                         f"  {tool_name}: {Colors.YELLOW}No action taken{Colors.RESET} {Colors.BLUE}({before_v}){Colors.RESET}"
                     )
+                    status_by_tool[tool_name] = "no-action"
 
             # Skip original loop as we've replaced it
+
+        actual_upgrades = sum(
+            1 for status in status_by_tool.values() if status == "upgraded"
+        )
 
         typer.echo(
             f"\n{Colors.GREEN}Upgrade complete: {actual_upgrades}/{len(upgradeable_tools)} tools upgraded successfully{Colors.RESET}"
@@ -352,7 +387,7 @@ def handle_upgrade_command(
         # Capture pre-upgrade version
         try:
             temp_tool = upgradeable_tools[target](config)
-            before_version = temp_tool._get_version()
+            before_version = _format_version(temp_tool._get_version())
         except Exception:
             before_version = "unknown"
         typer.echo(
@@ -384,12 +419,21 @@ def handle_upgrade_command(
                 getattr(tool, "install_description", target), install_cmd
             ):
                 try:
-                    after_version = upgradeable_tools[target](config)._get_version()
+                    after_version = _format_version(
+                        upgradeable_tools[target](config)._get_version()
+                    )
                 except Exception:
                     after_version = "unknown"
-                typer.echo(
-                    f"{Colors.GREEN}Successfully upgraded {target}{Colors.RESET} {Colors.BLUE}({before_version} -> {after_version}){Colors.RESET}"
-                )
+
+                # Check if version actually changed
+                if before_version == after_version and before_version != "unknown":
+                    typer.echo(
+                        f"  {target}: {Colors.YELLOW}✓ No upgrade (version unchanged){Colors.RESET} {Colors.BLUE}({before_version}){Colors.RESET}"
+                    )
+                else:
+                    typer.echo(
+                        f"{Colors.GREEN}Successfully upgraded {target}{Colors.RESET} {Colors.BLUE}({before_version} -> {after_version}){Colors.RESET}"
+                    )
                 return 0
             else:
                 typer.echo(f"{Colors.RED}Failed to upgrade {target}{Colors.RESET}")

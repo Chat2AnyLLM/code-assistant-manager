@@ -8,6 +8,8 @@ from typing import List, Optional
 import typer
 from typer import Context
 
+from code_assistant_manager.cli.prompts_commands import prompt_app
+from code_assistant_manager.cli.skills_commands import skill_app
 from code_assistant_manager.config import ConfigManager
 from code_assistant_manager.mcp.cli import app as mcp_app
 from code_assistant_manager.tools import (
@@ -198,6 +200,12 @@ app.add_typer(config_app, name="cf", hidden=True)
 # Add the MCP app as a subcommand to the main app
 app.add_typer(mcp_app, name="mcp")
 app.add_typer(mcp_app, name="m", hidden=True)
+# Add the prompt app as a subcommand to the main app
+app.add_typer(prompt_app, name="prompt")
+app.add_typer(prompt_app, name="p", hidden=True)
+# Add the skill app as a subcommand to the main app
+app.add_typer(skill_app, name="skill")
+app.add_typer(skill_app, name="s", hidden=True)
 
 
 @config_app.command("validate")
@@ -253,9 +261,9 @@ def list_config():
     typer.echo(f"{Colors.CYAN}Code Assistant Manager (CAM):{Colors.RESET}")
     home = Path.home()
     cam_config_locations = [
-        home / ".config" / "code-assistant-manager" / "settings.json",
-        Path.cwd() / "settings.json",
-        home / "settings.json",
+        home / ".config" / "code-assistant-manager" / "providers.json",
+        Path.cwd() / "providers.json",
+        home / "providers.json",
     ]
     for path in cam_config_locations:
         status = f"{Colors.GREEN}✓{Colors.RESET}" if path.exists() else " "

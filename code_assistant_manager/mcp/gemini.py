@@ -12,6 +12,45 @@ class GeminiMCPClient(MCPClient):
     def __init__(self):
         super().__init__("gemini")
 
+    def _convert_server_config_to_client_format(self, server_config) -> dict:
+        """
+        Override to provide Gemini-specific server config conversion.
+
+        For HTTP-type servers, Gemini uses 'httpUrl' instead of 'url'.
+
+        Args:
+            server_config: STDIOServerConfig or RemoteServerConfig object
+
+        Returns:
+            Dict in Gemini configuration format
+        """
+        if hasattr(server_config, "url") and server_config.url:
+            # Remote/HTTP server - use Gemini's httpUrl format
+            config = {
+                "httpUrl": server_config.url,
+            }
+            if hasattr(server_config, "headers") and server_config.headers:
+                config["headers"] = server_config.headers
+            return config
+        else:
+            # STDIO server - use base implementation
+            config = {
+                "type": "stdio",
+                "command": getattr(server_config, "command", "echo"),
+            }
+
+            args = getattr(server_config, "args", [])
+            if args:
+                config["args"] = args
+            else:
+                config["args"] = []
+
+            env = getattr(server_config, "env", {})
+            if env:
+                config["env"] = env
+
+            return config
+
     def add_server(self, server_name: str, scope: str = "user") -> bool:
         """Add a server to Gemini config files immediately using config file editing for efficiency."""
         # Get server configuration from registry

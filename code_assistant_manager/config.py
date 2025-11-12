@@ -12,27 +12,27 @@ logger = logging.getLogger(__name__)
 
 
 class ConfigManager:
-    """Manages settings.json file parsing and endpoint configuration."""
+    """Manages providers.json file parsing and endpoint configuration."""
 
     def __init__(self, config_path: Optional[str] = None):
         """
         Initialize ConfigManager.
 
         Args:
-            config_path: Path to settings.json. If None, looks for it in standard locations.
+            config_path: Path to providers.json. If None, looks for it in standard locations.
         """
         logger.debug(f"Initializing ConfigManager with config_path: {config_path}")
         if config_path is None:
-            # Lookup order for settings.json (installed location first):
-            # 1) ~/.config/code-assistant-manager/settings.json
-            # 2) ./settings.json (current working directory)
-            # 3) $HOME/settings.json
+            # Lookup order for providers.json (installed location first):
+            # 1) ~/.config/code-assistant-manager/providers.json
+            # 2) ./providers.json (current working directory)
+            # 3) $HOME/providers.json
             script_dir = Path(__file__).parent
             home_config = (
-                Path.home() / ".config" / "code-assistant-manager" / "settings.json"
+                Path.home() / ".config" / "code-assistant-manager" / "providers.json"
             )
-            cwd_config = Path.cwd() / "settings.json"
-            home_root_config = Path.home() / "settings.json"
+            cwd_config = Path.cwd() / "providers.json"
+            home_root_config = Path.home() / "providers.json"
 
             logger.debug(
                 f"Checking config locations: home={home_config}, cwd={cwd_config}, home_root={home_root_config}"
@@ -48,10 +48,8 @@ class ConfigManager:
                 config_path = str(home_root_config)
                 logger.debug(f"Using home root config: {config_path}")
             else:
-                # Fallback to bundled settings.json or example in the package
-                config_path = str(script_dir / "settings.json")
-                if not Path(config_path).exists():
-                    config_path = str(script_dir / "settings.json.example")
+                # Fallback to bundled providers.json in the package
+                config_path = str(script_dir / "providers.json")
                 logger.debug(f"Using fallback config: {config_path}")
 
         self.config_path = Path(config_path)
@@ -505,7 +503,7 @@ def validate_command(value: str) -> bool:
     if any(path in value for path in dangerous_file_operations):
         return False
     # Allow commonly used safe shell constructs
-    # These are needed for legitimate use cases like the examples in settings.json.example
+    # These are needed for legitimate use cases like the examples in providers.json
     safe_shell_constructs = [
         "|",  # Pipe (used in the litellm example)
         "&&",  # Command chaining (used in the copilot-api example)

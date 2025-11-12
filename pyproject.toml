@@ -62,8 +62,9 @@ version = {attr = "code_assistant_manager.__version__"}
 "code_assistant_manager" = [
   "mcp/registry/**/*.json",
   "mcp/registry/*.json",
-  "settings.json.example",
+  "providers.json",
   "tools.yaml",
+  "skill_repos.json",
 ]
 
 [project.scripts]

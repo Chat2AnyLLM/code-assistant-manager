@@ -76,7 +76,7 @@ code-assistant-manager/
 │   └── ui.py           # User interface components
 ├── docs/               # Documentation files
 ├── tests/              # Test suite
-├── settings.json       # Main configuration file
+├── providers.json       # Main configuration file
 ├── tools.yaml          # External tool definitions
 └── setup.py           # Package setup
 ```

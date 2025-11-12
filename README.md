@@ -4,7 +4,7 @@ Unified Python CLI for AI coding assistants — a focused, concise guide.
 
 Overview
 
-code-assistant-manager provides a single CLI to access multiple AI coding assistants (Claude, Codex, Qwen, GitHub Copilot, and more). It offers interactive model selection, configurable endpoints, secure environment management, MCP server integration, and a polished terminal UI.
+code-assistant-manager provides a single CLI to access multiple AI coding assistants (Claude, Codex, Qwen, GitHub Copilot, and more). It offers interactive model selection, configurable endpoints, secure environment management, MCP server integration, **prompt and skill management**, and a polished terminal UI.
 
 Deep analysis of this repository (developer-focused)
 
@@ -15,6 +15,8 @@ Repository layout
 - code_assistant_manager/ — main Python package implementing the CLI, tools registry, MCP support, menus and utilities.
   - cli.py: Main Typer-based CLI and legacy compatibility layer. Key commands: launch, upgrade/install, uninstall, doctor, completion. (file: code_assistant_manager/cli.py)
   - __init__.py: Package metadata and __version__.
+  - prompts.py: Prompt management for AI assistants.
+  - skills.py: Skill management for AI assistants.
   - tools/: Tool implementations and CLITool interface.
   - mcp/: MCP subsystem with manager, CLI, server registry JSONs. (files: code_assistant_manager/mcp/manager.py, server_commands.py, cli.py, registry/servers/*.json)
   - menu/: Terminal UI components and centered menus used to select tools interactively.
@@ -33,6 +35,8 @@ Key files and responsibilities
 
 - README.md (this file): User-facing quick-start and developer deep analysis (this section).
 
+- docs/PROMPTS_AND_SKILLS.md: Guide for managing prompts and skills.
+
 - docs/INSTALL.md: Detailed installation options and scripts.
 
 - docs/CLAUDE.md: Repository guidelines for AI-assisted edits. Important: follow these when creating AI-generated changes.
@@ -43,7 +47,7 @@ Entrypoints and CLI flow
 
 - Console scripts: `code-assistant-manager` and `cam` map to code_assistant_manager.cli:main (pyproject.toml and setup.py).
 
-- The CLI is implemented with Typer (click-based). Subcommands include `launch` (interactive menu or per-tool commands), `version` (show version information), `mcp` (MCP server management), `upgrade`/`install` (tool installers), `doctor` (diagnostics), `completion` (generate shell completion script).
+- The CLI is implemented with Typer (click-based). Subcommands include `launch` (interactive menu or per-tool commands), `version` (show version information), `mcp` (MCP server management), `prompt` (prompt management), `skill` (skill management), `upgrade`/`install` (tool installers), `doctor` (diagnostics), `completion` (generate shell completion script).
 
 - `cli.py` also contains compatibility code that allows `code-assistant-manager <tool>` direct invocation and a legacy `main()` wrapper for backward compatibility.
 

@@ -94,9 +94,9 @@ def run_doctor_checks(config, verbose: bool = False) -> int:
         env_file_paths.insert(0, Path(found_env))
 
     config_file_paths = [
-        Path.home() / ".config" / "code-assistant-manager" / "settings.json",
-        Path.cwd() / "settings.json",
-        Path.home() / "settings.json",
+        Path.home() / ".config" / "code-assistant-manager" / "providers.json",
+        Path.cwd() / "providers.json",
+        Path.home() / "providers.json",
     ]
     env_found = False
     config_found = False
@@ -120,18 +120,18 @@ def run_doctor_checks(config, verbose: bool = False) -> int:
         except Exception as e:
             logger.debug(f"Error while checking env file {env_path}: {e}")
 
-    # Check for settings.json files
+    # Check for providers.json files
     for config_path in config_file_paths:
         if config_path.exists():
             config_found = True
-            check_passed(f"Settings file found: {config_path}")
+            check_passed(f"Providers config file found: {config_path}")
             # Check permissions
             perms = oct(config_path.stat().st_mode)[-3:]
             if perms in ["600", "400"]:
-                check_passed("Settings file has secure permissions")
+                check_passed("Providers config file has secure permissions")
             else:
                 check_warning(
-                    f"Settings file permissions: {perms}",
+                    f"Providers config file permissions: {perms}",
                     "Consider setting permissions to 600 for security",
                 )
             break
@@ -143,8 +143,8 @@ def run_doctor_checks(config, verbose: bool = False) -> int:
 
     if not config_found:
         check_warning(
-            "No settings.json file found",
-            "Create a settings.json file for configuration",
+            "No providers.json file found",
+            "Create a providers.json file for configuration",
         )
 
     # 5. Tool Installation Check
