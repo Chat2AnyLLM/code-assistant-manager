@@ -16,7 +16,7 @@
   "installations": {
     "http": {
       "type": "http",
-      "url": "https://knowledge-mcp.aws.amazon.com",
+      "url": "https://knowledge-mcp.global.api.aws",
       "description": "Run AWS Knowledge MCP server via HTTP",
       "recommended": true
     }
