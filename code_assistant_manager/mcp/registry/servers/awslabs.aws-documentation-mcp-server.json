@@ -1,5 +1,5 @@
 {
-  "name": "awslabs-aws-documentation-mcp-server",
+  "name": "awslabs.aws-documentation-mcp-server",
   "display_name": "AWS Documentation MCP Server (awslabs)",
   "description": "MCP server to provide access to AWS documentation and reference data.",
   "repository": {
@@ -52,7 +52,7 @@
     {
       "title": "Configure for MCP client",
       "description": "Example configuration snippet for a client",
-      "prompt": "{\n  \"mcpServers\": {\n    \"awslabs-aws-documentation-mcp-server\": {\n      \"command\": \"uvx\",\n      \"args\": [\"awslabs-aws-documentation-mcp-server@latest\"],\n      \"env\": {\n        \"FASTMCP_LOG_LEVEL\": \"ERROR\",\n        \"AWS_DOCUMENTATION_PARTITION\": \"aws\",\n        \"MCP_USER_AGENT\": \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36\"\n      },\n      \"disabled\": false,\n      \"autoApprove\": []\n    }\n  }\n}"
+      "prompt": "{\n  \"mcpServers\": {\n    \"awslabs.aws-documentation-mcp-server\": {\n      \"command\": \"uvx\",\n      \"args\": [\"awslabs.aws-documentation-mcp-server@latest\"],\n      \"env\": {\n        \"FASTMCP_LOG_LEVEL\": \"ERROR\",\n        \"AWS_DOCUMENTATION_PARTITION\": \"aws\",\n        \"MCP_USER_AGENT\": \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36\"\n      },\n      \"disabled\": false,\n      \"autoApprove\": []\n    }\n  }\n}"
     }
   ],
   "arguments": {
@@ -63,10 +63,10 @@
     }
   },
   "mcpServers": {
-    "awslabs-aws-documentation-mcp-server": {
+    "awslabs.aws-documentation-mcp-server": {
       "command": "uvx",
       "args": [
-        "awslabs-aws-documentation-mcp-server@latest"
+        "awslabs.aws-documentation-mcp-server@latest"
       ],
       "env": {
         "FASTMCP_LOG_LEVEL": "ERROR",
