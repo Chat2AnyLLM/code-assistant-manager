@@ -16,24 +16,23 @@
   "installations": {
     "http": {
       "type": "http",
-      "url": "https://mcp.deepwiki.com/mcp",
-      "description": "Run deepwiki mcp directly with HTTP",
+      "url": "https://knowledge-mcp.aws.amazon.com",
+      "description": "Run AWS Knowledge MCP server via HTTP",
       "recommended": true
     }
   },
   "examples": [
     {
-      "title": "Configure for MCP client",
-      "description": "Example configuration snippet for a client",
-      "prompt": "{\n  \"mcpServers\": {\n    \"aws-knowledge-mcp-server\": {\n      \"command\": \"npx\",\n      \"args\": [\"@modelcontextprotocol/inspector\", \"https://knowledge-mcp.global.api.aws\"],\n      \"env\": {},\n      \"disabled\": false,\n      \"autoApprove\": []\n    }\n  }\n}"
+      "title": "Configure for MCP client (HTTP)",
+      "description": "Example configuration snippet for HTTP-based access",
+      "prompt": "{\n  \"mcpServers\": {\n    \"aws-knowledge-mcp-server\": {\n      \"url\": \"https://knowledge-mcp.aws.amazon.com\",\n      \"type\": \"http\",\n      \"disabled\": false,\n      \"autoApprove\": []\n    }\n  }\n}"
     }
   ],
   "arguments": {},
   "mcpServers": {
     "aws-knowledge-mcp-server": {
-      "command": "npx",
-      "args": ["@modelcontextprotocol/inspector", "https://knowledge-mcp.global.api.aws"],
-      "env": {},
+      "url": "https://knowledge-mcp.aws.amazon.com",
+      "type": "http",
       "disabled": false,
       "autoApprove": []
     }
