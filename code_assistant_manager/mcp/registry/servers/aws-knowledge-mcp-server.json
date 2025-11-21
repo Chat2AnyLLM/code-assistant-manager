@@ -29,14 +29,6 @@
     }
   ],
   "arguments": {},
-  "mcpServers": {
-    "aws-knowledge-mcp-server": {
-      "url": "https://knowledge-mcp.aws.amazon.com",
-      "type": "http",
-      "disabled": false,
-      "autoApprove": []
-    }
-  },
   "is_official": false,
   "is_archived": false,
   "docker_url": null
