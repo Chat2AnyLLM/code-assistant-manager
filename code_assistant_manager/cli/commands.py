@@ -659,14 +659,23 @@ _code_assistant_manager_completions()
     words="${COMP_WORDS[@]}"
     cword=$COMP_CWORD
 
-    # Main commands
-    commands="launch l config mcp upgrade u install i doctor d completion comp help --help --version --config --endpoints --debug -d"
+    # Main commands (visible and hidden aliases)
+    commands="launch l config cf mcp m prompt p skill s upgrade u install i uninstall un doctor d version v completion comp c --help --version --config --endpoints --debug -d"
 
     # Tool names for launch command
-    tools="claude codex copilot gemini droid qwen codebuddy iflow qodercli zed neovate"
+    tools="claude codex copilot gemini droid qwen codebuddy iflow qodercli zed neovate crush cursor-agent"
 
-    # MCP subcommands
-    mcp_commands="server add remove list refresh"
+    # MCP subcommands (mcp server ...)
+    mcp_server_commands="list search show add remove update"
+
+    # Config subcommands
+    config_commands="validate list ls l"
+
+    # Prompt subcommands
+    prompt_commands="list view create update delete sync import-live show-live import export unsync status"
+
+    # Skill subcommands
+    skill_commands="list fetch view create update delete install uninstall repos add-repo remove-repo import export installed uninstall-all"
 
     # Global flags
     global_flags="--help --version --config --endpoints --debug -d"
@@ -690,27 +699,46 @@ _code_assistant_manager_completions()
             COMPREPLY=( $(compgen -W "${tools}" -- ${cur}) )
             return 0
             ;;
-        mcp)
-            COMPREPLY=( $(compgen -W "${mcp_commands}" -- ${cur}) )
+        mcp|m)
+            COMPREPLY=( $(compgen -W "server" -- ${cur}) )
+            return 0
+            ;;
+        server)
+            # Check if parent is mcp
+            if [ "${COMP_WORDS[1]}" = "mcp" ] || [ "${COMP_WORDS[1]}" = "m" ]; then
+                COMPREPLY=( $(compgen -W "${mcp_server_commands}" -- ${cur}) )
+                return 0
+            fi
+            ;;
+        config|cf)
+            COMPREPLY=( $(compgen -W "${config_commands}" -- ${cur}) )
+            return 0
+            ;;
+        prompt|p)
+            COMPREPLY=( $(compgen -W "${prompt_commands}" -- ${cur}) )
+            return 0
+            ;;
+        skill|s)
+            COMPREPLY=( $(compgen -W "${skill_commands}" -- ${cur}) )
             return 0
             ;;
         upgrade|u)
-            COMPREPLY=( $(compgen -W "all ${tools} mcp" -- ${cur}) )
+            COMPREPLY=( $(compgen -W "all ${tools} mcp --verbose -v" -- ${cur}) )
             return 0
             ;;
         install|i)
-            COMPREPLY=( $(compgen -W "all ${tools} mcp" -- ${cur}) )
+            COMPREPLY=( $(compgen -W "all ${tools} mcp --verbose -v" -- ${cur}) )
+            return 0
+            ;;
+        uninstall|un)
+            COMPREPLY=( $(compgen -W "all ${tools} --force -f --keep-config" -- ${cur}) )
             return 0
             ;;
         doctor|d)
             COMPREPLY=( $(compgen -W "--verbose -v" -- ${cur}) )
             return 0
             ;;
-        config)
-            COMPREPLY=( $(compgen -W "validate" -- ${cur}) )
-            return 0
-            ;;
-        completion|comp)
+        completion|comp|c)
             COMPREPLY=( $(compgen -W "bash zsh" -- ${cur}) )
             return 0
             ;;
@@ -722,10 +750,58 @@ _code_assistant_manager_completions()
             COMPREPLY=( $(compgen -W "all ${tools} mcp" -- ${cur}) )
             return 0
             ;;
+        --client|-c)
+            COMPREPLY=( $(compgen -W "all ${tools}" -- ${cur}) )
+            return 0
+            ;;
+        --scope|-s)
+            COMPREPLY=( $(compgen -W "user project" -- ${cur}) )
+            return 0
+            ;;
+        --app-type|-a)
+            COMPREPLY=( $(compgen -W "claude codex gemini qwen codebuddy" -- ${cur}) )
+            return 0
+            ;;
         --verbose|-v)
-            # After --verbose, complete with commands that support it
             COMPREPLY=( $(compgen -W "${commands}" -- ${cur}) )
             return 0
+            ;;
+        # MCP server subcommand options
+        list)
+            if [ "${COMP_WORDS[1]}" = "mcp" ] || [ "${COMP_WORDS[1]}" = "m" ]; then
+                COMPREPLY=( $(compgen -W "--client -c --interactive -i --help" -- ${cur}) )
+                return 0
+            fi
+            ;;
+        search)
+            if [ "${COMP_WORDS[1]}" = "mcp" ] || [ "${COMP_WORDS[1]}" = "m" ]; then
+                COMPREPLY=( $(compgen -W "--help" -- ${cur}) )
+                return 0
+            fi
+            ;;
+        show)
+            if [ "${COMP_WORDS[1]}" = "mcp" ] || [ "${COMP_WORDS[1]}" = "m" ]; then
+                COMPREPLY=( $(compgen -W "--schema --help" -- ${cur}) )
+                return 0
+            fi
+            ;;
+        add)
+            if [ "${COMP_WORDS[1]}" = "mcp" ] || [ "${COMP_WORDS[1]}" = "m" ]; then
+                COMPREPLY=( $(compgen -W "--client -c --method -m --force -f --interactive -i --scope -s --help" -- ${cur}) )
+                return 0
+            fi
+            ;;
+        remove)
+            if [ "${COMP_WORDS[1]}" = "mcp" ] || [ "${COMP_WORDS[1]}" = "m" ]; then
+                COMPREPLY=( $(compgen -W "--client -c --interactive -i --scope -s --help" -- ${cur}) )
+                return 0
+            fi
+            ;;
+        update)
+            if [ "${COMP_WORDS[1]}" = "mcp" ] || [ "${COMP_WORDS[1]}" = "m" ]; then
+                COMPREPLY=( $(compgen -W "--client -c --interactive -i --scope -s --help" -- ${cur}) )
+                return 0
+            fi
             ;;
     esac
 
@@ -734,58 +810,133 @@ _code_assistant_manager_completions()
         case "${COMP_WORDS[1]}" in
             launch|l)
                 case "${COMP_WORDS[2]}" in
-                    claude|codex|copilot|gemini|droid|qwen|codebuddy|iflow|qodercli|zed|neovate)
-                        # Tool-specific options can be added here
-                        COMPREPLY=( $(compgen -W "--help" -- ${cur}) )
-                        return 0
-                        ;;
-                esac
-                ;;
-            mcp)
-                case "${COMP_WORDS[2]}" in
-                    server)
-                        COMPREPLY=( $(compgen -W "add remove list refresh --client --help" -- ${cur}) )
-                        return 0
-                        ;;
-                    add|remove|list|refresh)
-                        COMPREPLY=( $(compgen -W "--client --help" -- ${cur}) )
-                        return 0
-                        ;;
-                    --client)
-                        COMPREPLY=( $(compgen -W "${tools}" -- ${cur}) )
-                        return 0
-                        ;;
-                esac
-                ;;
-            upgrade|u)
-                case "${COMP_WORDS[2]}" in
-                    all|claude|codex|copilot|gemini|droid|qwen|codebuddy|iflow|qodercli|zed|neovate|mcp)
-                        COMPREPLY=( $(compgen -W "--help" -- ${cur}) )
-                        return 0
-                        ;;
-                esac
-                ;;
-            install|i)
-                case "${COMP_WORDS[2]}" in
-                    all|claude|codex|copilot|gemini|droid|qwen|codebuddy|iflow|qodercli|zed|neovate|mcp)
-                        COMPREPLY=( $(compgen -W "--help" -- ${cur}) )
-                        return 0
-                        ;;
-                esac
-                ;;
-            doctor|d)
-                COMPREPLY=( $(compgen -W "--verbose --help" -- ${cur}) )
-                return 0
-                ;;
-            config)
-                case "${COMP_WORDS[2]}" in
-                    validate)
+                    claude|codex|copilot|gemini|droid|qwen|codebuddy|iflow|qodercli|zed|neovate|crush|cursor-agent)
                         COMPREPLY=( $(compgen -W "--config --help" -- ${cur}) )
                         return 0
                         ;;
                 esac
                 ;;
-            completion|comp)
+            mcp|m)
+                if [ "${COMP_WORDS[2]}" = "server" ]; then
+                    if [ $cword -eq 3 ]; then
+                        COMPREPLY=( $(compgen -W "${mcp_server_commands}" -- ${cur}) )
+                        return 0
+                    fi
+                fi
+                ;;
+            config|cf)
+                case "${COMP_WORDS[2]}" in
+                    validate)
+                        COMPREPLY=( $(compgen -W "--config --verbose --help" -- ${cur}) )
+                        return 0
+                        ;;
+                    list|ls|l)
+                        COMPREPLY=( $(compgen -W "--help" -- ${cur}) )
+                        return 0
+                        ;;
+                esac
+                ;;
+            prompt|p)
+                case "${COMP_WORDS[2]}" in
+                    list)
+                        COMPREPLY=( $(compgen -W "--help" -- ${cur}) )
+                        return 0
+                        ;;
+                    view|delete)
+                        COMPREPLY=( $(compgen -W "--help" -- ${cur}) )
+                        return 0
+                        ;;
+                    create)
+                        COMPREPLY=( $(compgen -W "--title -t --content -c --description -d --tags --help" -- ${cur}) )
+                        return 0
+                        ;;
+                    update)
+                        COMPREPLY=( $(compgen -W "--title -t --content -c --description -d --tags --help" -- ${cur}) )
+                        return 0
+                        ;;
+                    sync)
+                        COMPREPLY=( $(compgen -W "--app-type -a --all --help" -- ${cur}) )
+                        return 0
+                        ;;
+                    import-live|show-live)
+                        COMPREPLY=( $(compgen -W "--app-type -a --help" -- ${cur}) )
+                        return 0
+                        ;;
+                    import|export)
+                        COMPREPLY=( $(compgen -W "--file -f --help" -- ${cur}) )
+                        return 0
+                        ;;
+                    unsync)
+                        COMPREPLY=( $(compgen -W "--app-type -a --prompt-id -p --all --help" -- ${cur}) )
+                        return 0
+                        ;;
+                    status)
+                        COMPREPLY=( $(compgen -W "--level -l --help" -- ${cur}) )
+                        return 0
+                        ;;
+                esac
+                ;;
+            skill|s)
+                case "${COMP_WORDS[2]}" in
+                    list|installed)
+                        COMPREPLY=( $(compgen -W "--app-type -a --help" -- ${cur}) )
+                        return 0
+                        ;;
+                    fetch|repos)
+                        COMPREPLY=( $(compgen -W "--help" -- ${cur}) )
+                        return 0
+                        ;;
+                    view|delete)
+                        COMPREPLY=( $(compgen -W "--help" -- ${cur}) )
+                        return 0
+                        ;;
+                    create)
+                        COMPREPLY=( $(compgen -W "--title -t --content -c --description -d --tags --help" -- ${cur}) )
+                        return 0
+                        ;;
+                    update)
+                        COMPREPLY=( $(compgen -W "--title -t --content -c --description -d --tags --help" -- ${cur}) )
+                        return 0
+                        ;;
+                    install|uninstall)
+                        COMPREPLY=( $(compgen -W "--app-type -a --help" -- ${cur}) )
+                        return 0
+                        ;;
+                    add-repo|remove-repo)
+                        COMPREPLY=( $(compgen -W "--owner -o --repo -r --help" -- ${cur}) )
+                        return 0
+                        ;;
+                    import|export)
+                        COMPREPLY=( $(compgen -W "--file -f --help" -- ${cur}) )
+                        return 0
+                        ;;
+                    uninstall-all)
+                        COMPREPLY=( $(compgen -W "--app-type -a --help" -- ${cur}) )
+                        return 0
+                        ;;
+                esac
+                ;;
+            upgrade|u|install|i)
+                case "${COMP_WORDS[2]}" in
+                    all|claude|codex|copilot|gemini|droid|qwen|codebuddy|iflow|qodercli|zed|neovate|crush|cursor-agent|mcp)
+                        COMPREPLY=( $(compgen -W "--verbose -v --help" -- ${cur}) )
+                        return 0
+                        ;;
+                esac
+                ;;
+            uninstall|un)
+                case "${COMP_WORDS[2]}" in
+                    all|claude|codex|copilot|gemini|droid|qwen|codebuddy|iflow|qodercli|zed|neovate|crush|cursor-agent)
+                        COMPREPLY=( $(compgen -W "--force -f --keep-config --help" -- ${cur}) )
+                        return 0
+                        ;;
+                esac
+                ;;
+            doctor|d)
+                COMPREPLY=( $(compgen -W "--verbose -v --help" -- ${cur}) )
+                return 0
+                ;;
+            completion|comp|c)
                 case "${COMP_WORDS[2]}" in
                     bash|zsh)
                         COMPREPLY=( $(compgen -W "--help" -- ${cur}) )
@@ -801,37 +952,42 @@ _code_assistant_manager_completions()
     return 0
 }
 
-complete -F _code_assistant_manager_completions code-assistant-manager"""
+complete -F _code_assistant_manager_completions code-assistant-manager
+complete -F _code_assistant_manager_completions cam"""
 
     elif shell == "zsh":
         return """# code-assistant-manager zsh completion
 
-#compdef code-assistant-manager
+#compdef code-assistant-manager cam
 
 _code_assistant_manager() {
-    local -a commands tools mcp_commands global_flags
+    local -a commands tools mcp_server_commands config_commands prompt_commands skill_commands global_flags
     local context state line
 
     commands=(
         'launch:Launch AI coding assistants'
         'l:Alias for launch'
         'config:Configuration management commands'
+        'cf:Alias for config'
         'mcp:Manage MCP servers'
+        'm:Alias for mcp'
+        'prompt:Prompt management commands'
+        'p:Alias for prompt'
+        'skill:Skill management commands'
+        's:Alias for skill'
         'upgrade:Upgrade CLI tools'
         'u:Alias for upgrade'
         'install:Install CLI tools'
         'i:Alias for install'
+        'uninstall:Uninstall CLI tools'
+        'un:Alias for uninstall'
         'doctor:Run diagnostic checks'
         'd:Alias for doctor'
+        'version:Show version information'
+        'v:Alias for version'
         'completion:Generate shell completion scripts'
         'comp:Alias for completion'
-        'help:Show help'
-        '--help:Show help'
-        '--version:Show version'
-        '--config[Specify config file]:file:_files'
-        '--endpoints[Show tool endpoints]:endpoint:->endpoints'
-        '--debug[Enable debug logging]'
-        '-d[Enable debug logging]'
+        'c:Alias for completion'
     )
 
     tools=(
@@ -846,14 +1002,57 @@ _code_assistant_manager() {
         'qodercli:Qoder assistant'
         'zed:Zed assistant'
         'neovate:Neovate assistant'
+        'crush:Charmland Crush assistant'
+        'cursor-agent:Cursor AI assistant'
     )
 
-    mcp_commands=(
-        'server:Server management commands'
-        'add:Add MCP servers'
-        'remove:Remove MCP servers'
+    mcp_server_commands=(
         'list:List MCP servers'
-        'refresh:Refresh MCP servers'
+        'search:Search for MCP servers'
+        'show:Show details of an MCP server'
+        'add:Add MCP servers to a client'
+        'remove:Remove MCP servers from a client'
+        'update:Update MCP servers for a client'
+    )
+
+    config_commands=(
+        'validate:Validate the configuration file'
+        'list:List all configuration file locations'
+        'ls:Alias for list'
+        'l:Alias for list'
+    )
+
+    prompt_commands=(
+        'list:List all prompts'
+        'view:View a specific prompt'
+        'create:Create a new prompt'
+        'update:Update an existing prompt'
+        'delete:Delete a prompt'
+        'sync:Sync prompts to editor clients'
+        'import-live:Import prompts from live editor'
+        'show-live:Show live prompts from editor'
+        'import:Import prompts from file'
+        'export:Export prompts to file'
+        'unsync:Remove synced prompts from editors'
+        'status:Show prompt sync status'
+    )
+
+    skill_commands=(
+        'list:List all skills'
+        'fetch:Fetch skills from repositories'
+        'view:View a specific skill'
+        'create:Create a new skill'
+        'update:Update an existing skill'
+        'delete:Delete a skill'
+        'install:Install a skill to an editor'
+        'uninstall:Uninstall a skill from an editor'
+        'repos:List skill repositories'
+        'add-repo:Add a skill repository'
+        'remove-repo:Remove a skill repository'
+        'import:Import skills from file'
+        'export:Export skills to file'
+        'installed:List installed skills'
+        'uninstall-all:Uninstall all skills from an editor'
     )
 
     global_flags=(
@@ -874,96 +1073,173 @@ _code_assistant_manager() {
             _describe -t commands 'code-assistant-manager command' commands
             ;;
         args)
-            case $words[2] in
+            case $words[1] in
                 launch|l)
-                    if (( CURRENT == 3 )); then
+                    if (( CURRENT == 2 )); then
                         _describe -t tools 'AI assistant' tools
                     else
-                        _values 'option' '--help[Show help]'
+                        _values 'option' '--config[Specify config file]:file:_files' '--help[Show help]'
                     fi
                     ;;
-                config)
-                    if (( CURRENT == 3 )); then
-                        _values 'config command' \
-                            'validate[Validate configuration file]'
+                config|cf)
+                    if (( CURRENT == 2 )); then
+                        _describe -t config_commands 'config command' config_commands
                     else
-                        _values 'option' '--help[Show help]'
-                    fi
-                    ;;
-                mcp)
-                    if (( CURRENT == 3 )); then
-                        _describe -t mcp_commands 'MCP command' mcp_commands
-                    elif (( CURRENT == 4 )); then
-                        case $words[3] in
-                            server)
-                                _values 'server command' \\
-                                    'add[Add servers]' \\
-                                    'remove[Remove servers]' \\
-                                    'list[List servers]' \\
-                                    'refresh[Refresh servers]' \\
-                                    '--client[Specify client]:client:(${(j: :)${(k)tools}})' \\
-                                    '--help[Show help]'
+                        case $words[2] in
+                            validate)
+                                _values 'option' '--config[Specify config file]:file:_files' '--verbose[Show verbose output]' '--help[Show help]'
                                 ;;
-                            add|remove|list|refresh)
-                                _values 'option' \\
-                                    '--client[Specify client]:client:(${(j: :)${(k)tools}})' \\
-                                    '--help[Show help]'
+                            *)
+                                _values 'option' '--help[Show help]'
                                 ;;
                         esac
-                    else
-                        _values 'option' '--help[Show help]'
                     fi
                     ;;
-                upgrade|u)
-                    if (( CURRENT == 3 )); then
-                        local upgrade_targets
-                        upgrade_targets=(${(k)tools} 'all' 'mcp')
-                        _describe -t targets 'upgrade target' upgrade_targets
+                mcp|m)
+                    if (( CURRENT == 2 )); then
+                        _values 'mcp command' 'server[Server management commands]'
+                    elif (( CURRENT == 3 )) && [[ $words[2] == "server" ]]; then
+                        _describe -t mcp_server_commands 'server command' mcp_server_commands
                     else
-                        _values 'option' '--help[Show help]'
+                        case $words[3] in
+                            list)
+                                _values 'option' '--client[Specify client]:client:(all claude codex copilot gemini droid qwen codebuddy)' '--interactive[Use interactive mode]' '--help[Show help]'
+                                ;;
+                            search)
+                                _values 'option' '--help[Show help]'
+                                ;;
+                            show)
+                                _values 'option' '--schema[Show raw JSON schema]' '--help[Show help]'
+                                ;;
+                            add)
+                                _values 'option' '--client[Specify client]:client:(all claude codex copilot gemini droid qwen codebuddy)' '--method[Installation method]' '--force[Force installation]' '--interactive[Use interactive mode]' '--scope[Configuration scope]:scope:(user project)' '--help[Show help]'
+                                ;;
+                            remove|update)
+                                _values 'option' '--client[Specify client]:client:(all claude codex copilot gemini droid qwen codebuddy)' '--interactive[Use interactive mode]' '--scope[Configuration scope]:scope:(user project)' '--help[Show help]'
+                                ;;
+                            *)
+                                _values 'option' '--help[Show help]'
+                                ;;
+                        esac
                     fi
                     ;;
-                install|i)
-                    if (( CURRENT == 3 )); then
-                        local install_targets
-                        install_targets=(${(k)tools} 'all' 'mcp')
-                        _describe -t targets 'install target' install_targets
+                prompt|p)
+                    if (( CURRENT == 2 )); then
+                        _describe -t prompt_commands 'prompt command' prompt_commands
                     else
-                        _values 'option' '--help[Show help]'
+                        case $words[2] in
+                            list)
+                                _values 'option' '--help[Show help]'
+                                ;;
+                            view|delete)
+                                _values 'option' '--help[Show help]'
+                                ;;
+                            create|update)
+                                _values 'option' '--title[Prompt title]' '--content[Prompt content]' '--description[Prompt description]' '--tags[Prompt tags]' '--help[Show help]'
+                                ;;
+                            sync)
+                                _values 'option' '--app-type[Application type]:app:(claude codex gemini qwen codebuddy)' '--all[Sync all prompts]' '--help[Show help]'
+                                ;;
+                            import-live|show-live)
+                                _values 'option' '--app-type[Application type]:app:(claude codex gemini qwen codebuddy)' '--help[Show help]'
+                                ;;
+                            import|export)
+                                _values 'option' '--file[File path]:file:_files' '--help[Show help]'
+                                ;;
+                            unsync)
+                                _values 'option' '--app-type[Application type]:app:(claude codex gemini qwen codebuddy)' '--prompt-id[Prompt ID]' '--all[Unsync all prompts]' '--help[Show help]'
+                                ;;
+                            status)
+                                _values 'option' '--level[Status level]:level:(summary detailed)' '--help[Show help]'
+                                ;;
+                            *)
+                                _values 'option' '--help[Show help]'
+                                ;;
+                        esac
+                    fi
+                    ;;
+                skill|s)
+                    if (( CURRENT == 2 )); then
+                        _describe -t skill_commands 'skill command' skill_commands
+                    else
+                        case $words[2] in
+                            list|installed)
+                                _values 'option' '--app-type[Application type]:app:(claude codex gemini qwen codebuddy)' '--help[Show help]'
+                                ;;
+                            fetch|repos|view|delete)
+                                _values 'option' '--help[Show help]'
+                                ;;
+                            create|update)
+                                _values 'option' '--title[Skill title]' '--content[Skill content]' '--description[Skill description]' '--tags[Skill tags]' '--help[Show help]'
+                                ;;
+                            install|uninstall|uninstall-all)
+                                _values 'option' '--app-type[Application type]:app:(claude codex gemini qwen codebuddy)' '--help[Show help]'
+                                ;;
+                            add-repo|remove-repo)
+                                _values 'option' '--owner[Repository owner]' '--repo[Repository name]' '--help[Show help]'
+                                ;;
+                            import|export)
+                                _values 'option' '--file[File path]:file:_files' '--help[Show help]'
+                                ;;
+                            *)
+                                _values 'option' '--help[Show help]'
+                                ;;
+                        esac
+                    fi
+                    ;;
+                upgrade|u|install|i)
+                    if (( CURRENT == 2 )); then
+                        local -a upgrade_targets
+                        upgrade_targets=('all:Upgrade/install all tools' ${tools[@]} 'mcp:MCP servers')
+                        _describe -t targets 'target' upgrade_targets
+                    else
+                        _values 'option' '--verbose[Show verbose output]' '--help[Show help]'
+                    fi
+                    ;;
+                uninstall|un)
+                    if (( CURRENT == 2 )); then
+                        local -a uninstall_targets
+                        uninstall_targets=('all:Uninstall all tools' ${tools[@]})
+                        _describe -t targets 'target' uninstall_targets
+                    else
+                        _values 'option' '--force[Force uninstall]' '--keep-config[Keep configuration files]' '--help[Show help]'
                     fi
                     ;;
                 doctor|d)
-                    _values 'option' \\
-                        '--verbose[Show detailed output]' \\
-                        '--help[Show help]'
+                    _values 'option' '--verbose[Show detailed output]' '--help[Show help]'
                     ;;
-                completion|comp)
-                    if (( CURRENT == 3 )); then
+                version|v)
+                    _values 'option' '--help[Show help]'
+                    ;;
+                completion|comp|c)
+                    if (( CURRENT == 2 )); then
                         _values 'shell' 'bash' 'zsh'
                     else
                         _values 'option' '--help[Show help]'
                     fi
                     ;;
                 --endpoints)
-                    local endpoint_targets
-                    endpoint_targets=(${(k)tools} 'all' 'mcp')
+                    local -a endpoint_targets
+                    endpoint_targets=('all' ${${tools[@]%%:*}} 'mcp')
                     _describe -t endpoints 'endpoint target' endpoint_targets
                     ;;
                 *)
-                    # Handle global flags and unknown commands
                     _describe -t global_flags 'global option' global_flags
                     ;;
             esac
             ;;
         endpoints)
-            local endpoint_targets
-            endpoint_targets=(${(k)tools} 'all' 'mcp')
+            local -a endpoint_targets
+            endpoint_targets=('all' ${${tools[@]%%:*}} 'mcp')
             _describe -t endpoints 'endpoint target' endpoint_targets
             ;;
     esac
 }
 
-_code_assistant_manager"""
+_code_assistant_manager "$@"
+
+# Also register for 'cam' alias
+compdef _code_assistant_manager cam"""
 
     else:
         return f"# Unsupported shell: {shell}"
