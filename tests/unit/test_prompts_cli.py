@@ -234,19 +234,7 @@ def test_sync_prompt_with_enable(cli_manager, tmp_path, monkeypatch):
 
 
 def test_enable_prompt(cli_manager, tmp_path, monkeypatch):
-    """enable command activates a prompt and syncs it."""
-    from code_assistant_manager.prompts import PROMPT_HANDLERS
-
-    # Setup user-level file path
-    user_claude_file = tmp_path / "user_claude.md"
-
-    # Update manager's handler with the new path
-    for name, cls in PROMPT_HANDLERS.items():
-        overrides = {"user_path": user_claude_file} if name == "claude" else {}
-        cli_manager._handlers[name] = cls(
-            user_path_override=overrides.get("user_path"),
-        )
-
+    """enable command sets prompt state to enabled without syncing."""
     prompt = Prompt(id="test-enable", name="Test Enable", content="enable content")
     cli_manager.create(prompt)
 
@@ -258,17 +246,14 @@ def test_enable_prompt(cli_manager, tmp_path, monkeypatch):
     prompts_commands.enable_prompt(
         prompt_id="test-enable",
         app_type="claude",
-        level="user",
-        project_dir=None,
     )
-
-    assert user_claude_file.exists()
-    assert user_claude_file.read_text() == "enable content"
 
     stored = cli_manager.get("test-enable")
     assert stored.enabled is True
     assert stored.app_type == "claude"
     assert any("enabled" in msg.lower() for msg in outputs)
+    # Should suggest using sync
+    assert any("sync" in msg.lower() for msg in outputs)
 
 
 def test_disable_prompt(cli_manager, tmp_path, monkeypatch):
@@ -331,8 +316,6 @@ def test_enable_prompt_invalid_app(cli_manager, tmp_path, monkeypatch):
         prompts_commands.enable_prompt(
             prompt_id="test-invalid-app",
             app_type="copilot",  # copilot doesn't support enable
-            level="user",
-            project_dir=None,
         )
 
     assert any("invalid" in msg.lower() for msg in outputs)

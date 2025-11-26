@@ -206,34 +206,16 @@ def enable_prompt(
         "-a",
         help="App type to enable for (claude, codex, gemini)",
     ),
-    level: str = typer.Option(
-        "user",
-        "--level",
-        "-l",
-        help="Enable level: 'user' or 'project'",
-    ),
-    project_dir: Optional[Path] = typer.Option(
-        None,
-        "--project-dir",
-        help="Project directory when using project level (defaults to current directory)",
-    ),
 ):
-    """Enable a prompt and sync it to the app file.
+    """Enable a prompt for an app type.
 
-    This will:
-    - Mark the prompt as enabled for the specified app
-    - Disable other prompts for the same app (user level only)
-    - Sync the prompt content to the app's prompt file
+    This only marks the prompt as enabled and associates it with the app.
+    It does NOT sync content to any files.
+    Use 'sync' to write content to prompt files.
     """
     if app_type not in USER_LEVEL_APPS:
         typer.echo(
             f"{Colors.RED}✗ Invalid app: {app_type}. Valid: {', '.join(USER_LEVEL_APPS)}{Colors.RESET}"
-        )
-        raise typer.Exit(1)
-
-    if level not in VALID_LEVELS:
-        typer.echo(
-            f"{Colors.RED}✗ Invalid level: {level}. Valid: {', '.join(VALID_LEVELS)}{Colors.RESET}"
         )
         raise typer.Exit(1)
 
@@ -244,24 +226,31 @@ def enable_prompt(
         typer.echo(f"{Colors.RED}✗ Prompt '{prompt_id}' not found{Colors.RESET}")
         raise typer.Exit(1)
 
-    level_project_dir = (
-        ensure_project_dir(level, project_dir if level == "project" else None)
-        if level == "project"
-        else None
-    )
+    if prompt.enabled and prompt.app_type == app_type:
+        typer.echo(
+            f"{Colors.YELLOW}Prompt '{prompt.name}' is already enabled for {app_type}{Colors.RESET}"
+        )
+        return
 
     try:
-        manager.activate(
-            prompt_id,
-            app_type,
-            level=level,
-            project_dir=level_project_dir,
+        # Disable other prompts for this app type
+        prompts = manager.get_all()
+        for p in prompts.values():
+            if p.id != prompt_id and p.enabled and p.app_type == app_type:
+                p.enabled = False
+                manager.update(p)
+
+        # Enable this prompt
+        prompt.enabled = True
+        prompt.app_type = app_type
+        manager.update(prompt)
+
+        typer.echo(
+            f"{Colors.GREEN}✓ Enabled '{prompt.name}' for {app_type}{Colors.RESET}"
         )
         typer.echo(
-            f"{Colors.GREEN}✓ Enabled '{prompt.name}' for {app_type} ({level}){Colors.RESET}"
+            f"  {Colors.CYAN}Tip:{Colors.RESET} Use 'sync {prompt_id} --app {app_type}' to write to file"
         )
-        file_path = get_prompt_file_path(app_type, level, level_project_dir)
-        typer.echo(f"  {Colors.CYAN}File:{Colors.RESET} {file_path}")
     except Exception as e:
         typer.echo(f"{Colors.RED}✗ Error: {e}{Colors.RESET}")
         raise typer.Exit(1)
