@@ -149,8 +149,8 @@ def test_show_live_all_apps_levels(cli_manager, tmp_path, monkeypatch):
     assert combined.count("Level:") >= 2
 
 
-def test_activate_prompt_project_scope(cli_manager, tmp_path, monkeypatch):
-    """activate supports project scope for every app."""
+def test_sync_prompt_project_scope(cli_manager, tmp_path, monkeypatch):
+    """sync supports project scope for every app."""
     prompt = Prompt(id="cli", name="CLI", content="project-level content")
     cli_manager.create(prompt)
 
@@ -162,11 +162,12 @@ def test_activate_prompt_project_scope(cli_manager, tmp_path, monkeypatch):
         prompts_commands.typer, "echo", lambda msg="": outputs.append(str(msg))
     )
 
-    prompts_commands.activate_prompt(
+    prompts_commands.sync_prompts(
         prompt_id="cli",
         app_type="claude",
         level="project",
         project_dir=project_dir,
+        enable=False,
     )
 
     prompt_file = project_dir / "CLAUDE.md"
@@ -176,3 +177,38 @@ def test_activate_prompt_project_scope(cli_manager, tmp_path, monkeypatch):
     stored = cli_manager.get("cli")
     assert stored.enabled is False
     assert any("CLAUDE.md" in msg for msg in outputs)
+
+
+def test_sync_prompt_with_enable(cli_manager, tmp_path, monkeypatch):
+    """sync --enable marks the prompt as active and syncs it."""
+    from code_assistant_manager import prompts as prompts_module
+
+    # Setup user-level file path
+    user_claude_file = tmp_path / "user_claude.md"
+    user_files = {"claude": user_claude_file}
+    monkeypatch.setattr(prompts_module, "USER_PROMPT_FILE_PATHS", user_files)
+    monkeypatch.setattr(prompts_module, "PROMPT_FILE_PATHS", user_files)
+
+    prompt = Prompt(id="test", name="Test", content="test content")
+    cli_manager.create(prompt)
+
+    outputs = []
+    monkeypatch.setattr(
+        prompts_commands.typer, "echo", lambda msg="": outputs.append(str(msg))
+    )
+
+    prompts_commands.sync_prompts(
+        prompt_id="test",
+        app_type="claude",
+        level="user",
+        project_dir=None,
+        enable=True,
+    )
+
+    assert user_claude_file.exists()
+    assert user_claude_file.read_text() == "test content"
+
+    stored = cli_manager.get("test")
+    assert stored.enabled is True
+    assert stored.app_type == "claude"
+    assert any("enabled" in msg.lower() for msg in outputs)

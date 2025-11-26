@@ -195,69 +195,6 @@ def delete_prompt(
         raise typer.Exit(1)
 
 
-@prompt_app.command("activate")
-def activate_prompt(
-    prompt_id: str = typer.Argument(..., help="Prompt identifier"),
-    app_type: str = typer.Option(
-        "claude",
-        "--app",
-        "-a",
-        help="App type to activate for (claude, codex, gemini)",
-    ),
-    level: str = typer.Option(
-        "user",
-        "--level",
-        "-l",
-        help="Scope to sync: 'user' (~/.<app>/) or 'project' (current directory)",
-    ),
-    project_dir: Optional[Path] = typer.Option(
-        None,
-        "--project-dir",
-        help="Project directory when using project scope (defaults to current directory)",
-    ),
-):
-    """Activate a prompt and sync it to the app's prompt file."""
-    target_app = resolve_single_app(app_type, VALID_APP_TYPES)
-    target_level = resolve_single_level(level, VALID_LEVELS, default="user")
-    level_project_dir = (
-        ensure_project_dir(
-            target_level,
-            project_dir if target_level == "project" else None,
-        )
-        if target_level == "project"
-        else None
-    )
-
-    manager = _get_prompt_manager()
-
-    try:
-        manager.activate(
-            prompt_id,
-            target_app,
-            level=target_level,
-            project_dir=level_project_dir,
-        )
-        file_path = get_prompt_file_path(target_app, target_level, level_project_dir)
-        typer.echo(f"{Colors.GREEN}✓ Prompt activated: {prompt_id}{Colors.RESET}")
-        typer.echo(f"  {Colors.CYAN}Synced to:{Colors.RESET} {file_path}")
-    except ValueError as e:
-        typer.echo(f"{Colors.RED}✗ Error: {e}{Colors.RESET}")
-        raise typer.Exit(1)
-
-
-@prompt_app.command("deactivate")
-def deactivate_prompt(prompt_id: str = typer.Argument(..., help="Prompt identifier")):
-    """Deactivate a prompt."""
-    manager = _get_prompt_manager()
-
-    try:
-        manager.deactivate(prompt_id)
-        typer.echo(f"{Colors.GREEN}✓ Prompt deactivated: {prompt_id}{Colors.RESET}")
-    except ValueError as e:
-        typer.echo(f"{Colors.RED}✗ Error: {e}{Colors.RESET}")
-        raise typer.Exit(1)
-
-
 @prompt_app.command("sync")
 def sync_prompts(
     prompt_id: Optional[str] = typer.Argument(
@@ -275,8 +212,25 @@ def sync_prompts(
         "-l",
         help="Sync level: 'user' (~/.claude/) or 'project' (current directory)",
     ),
+    project_dir: Optional[Path] = typer.Option(
+        None,
+        "--project-dir",
+        help="Project directory when using project level (defaults to current directory)",
+    ),
+    enable: bool = typer.Option(
+        False,
+        "--enable",
+        "-e",
+        help="Also mark this prompt as active (backs up existing content, disables other prompts for this app)",
+    ),
 ):
-    """Sync prompts to app files. Can sync a specific prompt or all active prompts."""
+    """Sync prompts to app files. Can sync a specific prompt or all active prompts.
+
+    Use --enable to also mark the prompt as active, which:
+    - Backs up existing prompt file content (if different)
+    - Disables other prompts for the same app type (user level only)
+    - Marks this prompt as enabled for tracking
+    """
     if level not in VALID_LEVELS:
         typer.echo(
             f"{Colors.RED}✗ Invalid level: {level}. Valid: {', '.join(VALID_LEVELS)}{Colors.RESET}"
@@ -284,6 +238,13 @@ def sync_prompts(
         raise typer.Exit(1)
 
     manager = _get_prompt_manager()
+
+    # Resolve project directory for project level
+    level_project_dir = (
+        ensure_project_dir(level, project_dir if level == "project" else None)
+        if level == "project"
+        else None
+    )
 
     if prompt_id:
         # Sync specific prompt to specific app
@@ -300,24 +261,42 @@ def sync_prompts(
             typer.echo(f"{Colors.RED}✗ Prompt not found: {prompt_id}{Colors.RESET}")
             raise typer.Exit(1)
 
-        file_path = get_prompt_file_path(target_app, level)
+        file_path = get_prompt_file_path(target_app, level, level_project_dir)
         if not file_path:
             typer.echo(f"{Colors.RED}✗ Unknown app type: {app_type}{Colors.RESET}")
             raise typer.Exit(1)
 
         try:
-            # Ensure parent directory exists
-            file_path.parent.mkdir(parents=True, exist_ok=True)
-            file_path.write_text(prompt.content, encoding="utf-8")
-            typer.echo(
-                f"{Colors.GREEN}✓ Synced '{prompt_id}' to {target_app} ({level}){Colors.RESET}"
-            )
+            if enable:
+                # Use activate() which handles backup, disabling other prompts, and syncing
+                manager.activate(
+                    prompt_id,
+                    target_app,
+                    level=level,
+                    project_dir=level_project_dir,
+                )
+                typer.echo(
+                    f"{Colors.GREEN}✓ Synced and enabled '{prompt_id}' for {target_app} ({level}){Colors.RESET}"
+                )
+            else:
+                # Just sync the file without changing enabled state
+                file_path.parent.mkdir(parents=True, exist_ok=True)
+                file_path.write_text(prompt.content, encoding="utf-8")
+                typer.echo(
+                    f"{Colors.GREEN}✓ Synced '{prompt_id}' to {target_app} ({level}){Colors.RESET}"
+                )
             typer.echo(f"  {Colors.CYAN}File:{Colors.RESET} {file_path}")
         except Exception as e:
             typer.echo(f"{Colors.RED}✗ Error: {e}{Colors.RESET}")
             raise typer.Exit(1)
     else:
         # Sync all active prompts
+        if enable:
+            typer.echo(
+                f"{Colors.RED}✗ --enable requires specifying a prompt ID{Colors.RESET}"
+            )
+            raise typer.Exit(1)
+
         if level == "project":
             typer.echo(
                 f"{Colors.RED}✗ --level project requires specifying a prompt ID{Colors.RESET}"
@@ -504,8 +483,18 @@ def unsync_prompt(
         "--project-dir",
         help="Project directory when clearing project prompts (defaults to current directory)",
     ),
+    disable: bool = typer.Option(
+        True,
+        "--disable/--no-disable",
+        "-d",
+        help="Also disable prompts that were active for the unsynced app (default: enabled)",
+    ),
 ):
-    """Clear/unsync prompt files for one or more app/level combinations."""
+    """Clear/unsync prompt files for one or more app/level combinations.
+
+    By default, also disables any prompts that were active for the unsynced app.
+    Use --no-disable to only clear the file without changing prompt states.
+    """
     target_apps = resolve_app_targets(app_type, VALID_APP_TYPES)
     target_levels = resolve_level_targets(level, VALID_LEVELS, default="user")
 
@@ -545,14 +534,14 @@ def unsync_prompt(
                 f"{Colors.GREEN}✓ Cleared prompt file: {file_path}{Colors.RESET}"
             )
 
-            if lvl == "user":
+            if disable and lvl == "user":
                 prompts = manager.get_all()
                 for prompt in prompts.values():
                     if prompt.enabled and prompt.app_type == app:
                         prompt.enabled = False
                         manager.update(prompt)
                         typer.echo(
-                            f"  {Colors.CYAN}Deactivated:{Colors.RESET} {prompt.id}"
+                            f"  {Colors.CYAN}Disabled:{Colors.RESET} {prompt.id}"
                         )
         except Exception as e:
             typer.echo(f"{Colors.RED}✗ Error: {e}{Colors.RESET}")
