@@ -156,6 +156,12 @@ def update_prompt(
     file: Optional[Path] = typer.Option(
         None, "--file", "-f", help="Read new content from file"
     ),
+    app: Optional[str] = typer.Option(
+        None,
+        "--app",
+        "-a",
+        help="App type (claude, codex, gemini, copilot)",
+    ),
 ):
     """Update an existing prompt."""
     manager = _get_prompt_manager()
@@ -165,6 +171,13 @@ def update_prompt(
         typer.echo(f"{Colors.RED}✗ Prompt '{prompt_id}' not found{Colors.RESET}")
         raise typer.Exit(1)
 
+    # Validate app type if provided
+    if app and app not in VALID_APP_TYPES:
+        typer.echo(
+            f"{Colors.RED}✗ Invalid app type: {app}. Valid: {VALID_APP_TYPES}{Colors.RESET}"
+        )
+        raise typer.Exit(1)
+
     # Update fields if provided
     if name:
         prompt.name = name
@@ -172,6 +185,8 @@ def update_prompt(
         prompt.description = description
     if file and file.exists():
         prompt.content = file.read_text()
+    if app:
+        prompt.app_type = app
 
     try:
         manager.update(prompt)
