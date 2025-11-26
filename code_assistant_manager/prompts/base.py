@@ -89,6 +89,45 @@ class BasePromptHandler(ABC):
             return project_dir / filename
         return None
 
+    def _normalize_header(self, content: str) -> str:
+        """
+        Normalize the first line header to match this tool's name.
+
+        If the content starts with a markdown header like '# Gemini Code Assistant',
+        it will be updated to match this tool (e.g., '# Claude Code Assistant').
+
+        Args:
+            content: The prompt content
+
+        Returns:
+            Content with normalized header
+        """
+        import re
+
+        lines = content.split("\n", 1)
+        if not lines:
+            return content
+
+        first_line = lines[0]
+        # Match markdown headers like "# Gemini Code Assistant Instructions"
+        # or "# Claude Code Assistant" etc.
+        header_pattern = r"^#\s+(Claude|Codex|Gemini|Copilot|GitHub Copilot)(\s+.*)?"
+        match = re.match(header_pattern, first_line, re.IGNORECASE)
+
+        if match:
+            # Get the tool name with proper capitalization
+            tool_display_name = self.tool_name.capitalize()
+            if self.tool_name == "copilot":
+                tool_display_name = "GitHub Copilot"
+
+            suffix = match.group(2) or ""
+            new_header = f"# {tool_display_name}{suffix}"
+            if len(lines) > 1:
+                return new_header + "\n" + lines[1]
+            return new_header
+
+        return content
+
     def sync_prompt(
         self,
         content: str,
@@ -114,6 +153,9 @@ class BasePromptHandler(ABC):
             raise ValueError(
                 f"Tool '{self.tool_name}' does not support level '{level}'"
             )
+
+        # Normalize header to match this tool's name
+        content = self._normalize_header(content)
 
         # Ensure parent directory exists
         file_path.parent.mkdir(parents=True, exist_ok=True)

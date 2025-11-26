@@ -20,6 +20,7 @@ from code_assistant_manager.prompts import (
     PROMPT_FILE_PATHS,
     Prompt,
     PromptManager,
+    get_handler,
     get_prompt_file_path,
 )
 
@@ -330,8 +331,9 @@ def sync_prompts(
                 )
             else:
                 # Just sync the file without changing enabled state
-                file_path.parent.mkdir(parents=True, exist_ok=True)
-                file_path.write_text(prompt.content, encoding="utf-8")
+                # Use the handler's sync_prompt method to ensure proper normalization
+                handler = get_handler(target_app)
+                handler.sync_prompt(prompt.content, level, level_project_dir)
                 typer.echo(
                     f"{Colors.GREEN}✓ Synced '{prompt_id}' to {target_app} ({level}){Colors.RESET}"
                 )
