@@ -2,6 +2,7 @@
 
 import json
 import logging
+import uuid
 from pathlib import Path
 from typing import Optional
 
@@ -41,6 +42,12 @@ def _get_prompt_manager() -> PromptManager:
     return PromptManager()
 
 
+def generate_prompt_id(prefix: str = "prompt") -> str:
+    """Generate a unique prompt ID with a short UUID suffix."""
+    short_uuid = uuid.uuid4().hex[:8]
+    return f"{prefix}-{short_uuid}"
+
+
 @prompt_app.command("list")
 def list_prompts():
     """List all prompts."""
@@ -59,11 +66,12 @@ def list_prompts():
             else f"{Colors.RED}✗{Colors.RESET}"
         )
         app_info = f" [{prompt.app_type}]" if prompt.app_type else ""
-        typer.echo(
-            f"{status} {Colors.BOLD}{prompt.name}{Colors.RESET}{app_info} ({prompt_id})"
-        )
+        typer.echo(f"{status} {Colors.BOLD}{prompt.name}{Colors.RESET}{app_info}")
+        typer.echo(f"  {Colors.CYAN}ID:{Colors.RESET} {prompt_id}")
         if prompt.description:
-            typer.echo(f"  {Colors.CYAN}{prompt.description}{Colors.RESET}")
+            typer.echo(
+                f"  {Colors.CYAN}Description:{Colors.RESET} {prompt.description}"
+            )
         typer.echo()
 
 
@@ -545,9 +553,11 @@ def show_live_prompt(
             )
 
             file_path = get_prompt_file_path(app, lvl, lvl_project_dir)
+            suggested_id = generate_prompt_id(f"{app}-{lvl}")
             typer.echo(f"\n{Colors.BOLD}Live prompt for {app}:{Colors.RESET}")
             typer.echo(f"{Colors.CYAN}Level:{Colors.RESET} {lvl}")
-            typer.echo(f"{Colors.CYAN}File:{Colors.RESET} {file_path}\n")
+            typer.echo(f"{Colors.CYAN}File:{Colors.RESET} {file_path}")
+            typer.echo(f"{Colors.CYAN}Import ID:{Colors.RESET} {suggested_id}\n")
 
             if content:
                 typer.echo(content)
@@ -565,10 +575,12 @@ def _show_copilot(manager: PromptManager, project_dir: Optional[Path]):
 
     base_dir = project_dir or Path.cwd()
     file_path = base_dir / ".github" / "copilot-instructions.md"
+    suggested_id = generate_prompt_id("copilot-repo")
 
     typer.echo(f"\n{Colors.BOLD}Live prompt for copilot:{Colors.RESET}")
     typer.echo(f"{Colors.CYAN}Level:{Colors.RESET} project")
-    typer.echo(f"{Colors.CYAN}File:{Colors.RESET} {file_path}\n")
+    typer.echo(f"{Colors.CYAN}File:{Colors.RESET} {file_path}")
+    typer.echo(f"{Colors.CYAN}Import ID:{Colors.RESET} {suggested_id}\n")
 
     if content:
         typer.echo(content)

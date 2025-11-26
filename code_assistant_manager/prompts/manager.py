@@ -2,6 +2,7 @@
 
 import json
 import logging
+import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Type
@@ -25,6 +26,12 @@ PROMPT_HANDLERS: Dict[str, Type[BasePromptHandler]] = {
 
 # Valid app types
 VALID_APP_TYPES = list(PROMPT_HANDLERS.keys())
+
+
+def generate_unique_id(prefix: str = "prompt") -> str:
+    """Generate a unique ID with a short UUID suffix."""
+    short_uuid = uuid.uuid4().hex[:8]
+    return f"{prefix}-{short_uuid}"
 
 
 def get_handler(app_type: str) -> BasePromptHandler:
@@ -309,9 +316,8 @@ class PromptManager:
                     return prompt.id
 
             # Create a backup prompt
-            timestamp = int(datetime.now().timestamp())
             scope_label = f"{level} " if level != "user" else ""
-            backup_id = f"backup-{level}-{app_type}-{timestamp}"
+            backup_id = generate_unique_id(f"backup-{app_type}-{level}")
             backup_prompt = Prompt(
                 id=backup_id,
                 name=f"Backup from {scope_label}{app_type.capitalize()} ({datetime.now().strftime('%Y-%m-%d %H:%M')})".strip(),
@@ -367,8 +373,7 @@ class PromptManager:
                 )
                 return prompt.id
 
-        timestamp = int(datetime.now().timestamp())
-        prompt_id = f"imported-{level}-{app_type}-{timestamp}"
+        prompt_id = generate_unique_id(f"{app_type}-{level}")
 
         if not name:
             level_label = "User" if level == "user" else "Project"
@@ -515,8 +520,7 @@ class PromptManager:
                 )
                 return prompt.id
 
-        timestamp = int(datetime.now().timestamp())
-        prompt_id = f"copilot-{instruction_type}-{timestamp}"
+        prompt_id = generate_unique_id(f"copilot-{instruction_type}")
 
         if not name:
             name = f"Copilot {instruction_type} instructions ({datetime.now().strftime('%Y-%m-%d %H:%M')})"
