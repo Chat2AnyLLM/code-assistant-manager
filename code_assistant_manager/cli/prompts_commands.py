@@ -553,11 +553,20 @@ def show_live_prompt(
             )
 
             file_path = get_prompt_file_path(app, lvl, lvl_project_dir)
-            suggested_id = generate_prompt_id(f"{app}-{lvl}")
+            # Show active prompt ID if one exists
+            active_prompt = manager.get_active_prompt(app)
             typer.echo(f"\n{Colors.BOLD}Live prompt for {app}:{Colors.RESET}")
             typer.echo(f"{Colors.CYAN}Level:{Colors.RESET} {lvl}")
             typer.echo(f"{Colors.CYAN}File:{Colors.RESET} {file_path}")
-            typer.echo(f"{Colors.CYAN}Import ID:{Colors.RESET} {suggested_id}\n")
+            if active_prompt:
+                typer.echo(
+                    f"{Colors.CYAN}Active Prompt:{Colors.RESET} {active_prompt.name} ({active_prompt.id})"
+                )
+            else:
+                typer.echo(
+                    f"{Colors.CYAN}Active Prompt:{Colors.RESET} {Colors.YELLOW}(none){Colors.RESET}"
+                )
+            typer.echo()
 
             if content:
                 typer.echo(content)
@@ -575,12 +584,14 @@ def _show_copilot(manager: PromptManager, project_dir: Optional[Path]):
 
     base_dir = project_dir or Path.cwd()
     file_path = base_dir / ".github" / "copilot-instructions.md"
-    suggested_id = generate_prompt_id("copilot-repo")
 
     typer.echo(f"\n{Colors.BOLD}Live prompt for copilot:{Colors.RESET}")
     typer.echo(f"{Colors.CYAN}Level:{Colors.RESET} project")
     typer.echo(f"{Colors.CYAN}File:{Colors.RESET} {file_path}")
-    typer.echo(f"{Colors.CYAN}Import ID:{Colors.RESET} {suggested_id}\n")
+    typer.echo(
+        f"{Colors.CYAN}Active Prompt:{Colors.RESET} {Colors.YELLOW}(use import-live to import){Colors.RESET}"
+    )
+    typer.echo()
 
     if content:
         typer.echo(content)
