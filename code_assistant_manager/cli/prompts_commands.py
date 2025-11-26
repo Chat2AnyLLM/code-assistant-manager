@@ -422,6 +422,9 @@ def import_live_prompt(
     manager = _get_prompt_manager()
     multiple = len(target_apps) * len(target_levels) > 1
 
+    # Track if we've imported copilot (to avoid duplicates)
+    copilot_imported = False
+
     for lvl in target_levels:
         lvl_project_dir = (
             ensure_project_dir(lvl, project_dir if lvl == "project" else None)
@@ -432,13 +435,10 @@ def import_live_prompt(
         for app in target_apps:
             # Handle Copilot specially - only project level
             if app == "copilot":
-                if lvl == "user":
-                    # If only copilot was requested with user level, auto-switch to project
-                    if len(target_apps) == 1 and len(target_levels) == 1:
-                        lvl_project_dir = ensure_project_dir("project", project_dir)
-                        _import_copilot(manager, name, lvl_project_dir)
-                    continue  # Skip user level for Copilot when importing multiple apps
-                _import_copilot(manager, name, lvl_project_dir)
+                if not copilot_imported:
+                    copilot_project_dir = ensure_project_dir("project", project_dir)
+                    _import_copilot(manager, name, copilot_project_dir)
+                    copilot_imported = True
                 continue
 
             prompt_name = name
@@ -521,6 +521,9 @@ def show_live_prompt(
 
     manager = _get_prompt_manager()
 
+    # Track if we've shown copilot (to avoid duplicates)
+    copilot_shown = False
+
     for lvl in target_levels:
         lvl_project_dir = (
             ensure_project_dir(lvl, project_dir if lvl == "project" else None)
@@ -531,13 +534,10 @@ def show_live_prompt(
         for app in target_apps:
             # Handle Copilot specially - only project level
             if app == "copilot":
-                if lvl == "user":
-                    # If only copilot was requested with user level, auto-switch to project
-                    if len(target_apps) == 1 and len(target_levels) == 1:
-                        lvl_project_dir = ensure_project_dir("project", project_dir)
-                        _show_copilot(manager, lvl_project_dir)
-                    continue  # Skip user level for Copilot when showing multiple apps
-                _show_copilot(manager, lvl_project_dir)
+                if not copilot_shown:
+                    copilot_project_dir = ensure_project_dir("project", project_dir)
+                    _show_copilot(manager, copilot_project_dir)
+                    copilot_shown = True
                 continue
 
             content = manager.get_live_content(
