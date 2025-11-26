@@ -207,26 +207,6 @@ class PromptManager:
         self._save_prompts(prompts)
         logger.info(f"Deleted prompt: {prompt_id}")
 
-    def enable(self, prompt_id: str) -> None:
-        """Enable a prompt."""
-        prompts = self._load_prompts()
-        if prompt_id not in prompts:
-            raise ValueError(f"Prompt with id '{prompt_id}' not found")
-        prompts[prompt_id].enabled = True
-        prompts[prompt_id].updated_at = int(datetime.now().timestamp() * 1000)
-        self._save_prompts(prompts)
-        logger.info(f"Enabled prompt: {prompt_id}")
-
-    def disable(self, prompt_id: str) -> None:
-        """Disable a prompt."""
-        prompts = self._load_prompts()
-        if prompt_id not in prompts:
-            raise ValueError(f"Prompt with id '{prompt_id}' not found")
-        prompts[prompt_id].enabled = False
-        prompts[prompt_id].updated_at = int(datetime.now().timestamp() * 1000)
-        self._save_prompts(prompts)
-        logger.info(f"Disabled prompt: {prompt_id}")
-
     def import_from_file(self, file_path: Path) -> None:
         """Import prompts from a JSON file."""
         try:

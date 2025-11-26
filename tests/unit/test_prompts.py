@@ -148,20 +148,6 @@ class TestPromptManager:
         manager.delete("test")
         assert manager.get("test") is None
 
-    def test_manager_enable_disable(self, temp_config_dir):
-        """Test enabling and disabling prompts."""
-        manager = PromptManager(temp_config_dir)
-        prompt = Prompt(id="test", name="Test", content="Content", enabled=False)
-        manager.create(prompt)
-
-        manager.enable("test")
-        loaded = manager.get("test")
-        assert loaded.enabled is True
-
-        manager.disable("test")
-        loaded = manager.get("test")
-        assert loaded.enabled is False
-
     def test_manager_upsert(self, temp_config_dir):
         """Test upserting a prompt."""
         manager = PromptManager(temp_config_dir)

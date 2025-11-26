@@ -195,35 +195,6 @@ def delete_prompt(
         raise typer.Exit(1)
 
 
-@prompt_app.command("enable")
-def enable_prompt(prompt_id: str = typer.Argument(..., help="Prompt identifier")):
-    """Enable a prompt (does not sync to file)."""
-    manager = _get_prompt_manager()
-
-    try:
-        manager.enable(prompt_id)
-        typer.echo(f"{Colors.GREEN}✓ Prompt enabled: {prompt_id}{Colors.RESET}")
-        typer.echo(
-            f"{Colors.CYAN}Note: Use 'cam prompt activate' to sync to app file{Colors.RESET}"
-        )
-    except ValueError as e:
-        typer.echo(f"{Colors.RED}✗ Error: {e}{Colors.RESET}")
-        raise typer.Exit(1)
-
-
-@prompt_app.command("disable")
-def disable_prompt(prompt_id: str = typer.Argument(..., help="Prompt identifier")):
-    """Disable a prompt."""
-    manager = _get_prompt_manager()
-
-    try:
-        manager.disable(prompt_id)
-        typer.echo(f"{Colors.GREEN}✓ Prompt disabled: {prompt_id}{Colors.RESET}")
-    except ValueError as e:
-        typer.echo(f"{Colors.RED}✗ Error: {e}{Colors.RESET}")
-        raise typer.Exit(1)
-
-
 @prompt_app.command("activate")
 def activate_prompt(
     prompt_id: str = typer.Argument(..., help="Prompt identifier"),
