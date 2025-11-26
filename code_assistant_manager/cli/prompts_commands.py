@@ -25,12 +25,14 @@ from code_assistant_manager.prompts import (
 logger = logging.getLogger(__name__)
 
 prompt_app = typer.Typer(
-    help="Manage prompts for AI assistants (Claude, Codex, Gemini)",
+    help="Manage prompts for AI assistants (Claude, Codex, Gemini, Copilot)",
     no_args_is_help=True,
 )
 
-# Valid app types
-VALID_APP_TYPES = ["claude", "codex", "gemini"]
+# Valid app types - copilot is special (project-level only with different structure)
+VALID_APP_TYPES = ["claude", "codex", "gemini", "copilot"]
+# Apps that support user-level prompts
+USER_LEVEL_APPS = ["claude", "codex", "gemini"]
 VALID_LEVELS = ["user", "project"]
 
 
@@ -195,6 +197,107 @@ def delete_prompt(
         raise typer.Exit(1)
 
 
+@prompt_app.command("enable")
+def enable_prompt(
+    prompt_id: str = typer.Argument(..., help="Prompt identifier to enable"),
+    app_type: str = typer.Option(
+        ...,
+        "--app",
+        "-a",
+        help="App type to enable for (claude, codex, gemini)",
+    ),
+    level: str = typer.Option(
+        "user",
+        "--level",
+        "-l",
+        help="Enable level: 'user' or 'project'",
+    ),
+    project_dir: Optional[Path] = typer.Option(
+        None,
+        "--project-dir",
+        help="Project directory when using project level (defaults to current directory)",
+    ),
+):
+    """Enable a prompt and sync it to the app file.
+
+    This will:
+    - Mark the prompt as enabled for the specified app
+    - Disable other prompts for the same app (user level only)
+    - Sync the prompt content to the app's prompt file
+    """
+    if app_type not in USER_LEVEL_APPS:
+        typer.echo(
+            f"{Colors.RED}✗ Invalid app: {app_type}. Valid: {', '.join(USER_LEVEL_APPS)}{Colors.RESET}"
+        )
+        raise typer.Exit(1)
+
+    if level not in VALID_LEVELS:
+        typer.echo(
+            f"{Colors.RED}✗ Invalid level: {level}. Valid: {', '.join(VALID_LEVELS)}{Colors.RESET}"
+        )
+        raise typer.Exit(1)
+
+    manager = _get_prompt_manager()
+    prompt = manager.get(prompt_id)
+
+    if not prompt:
+        typer.echo(f"{Colors.RED}✗ Prompt '{prompt_id}' not found{Colors.RESET}")
+        raise typer.Exit(1)
+
+    level_project_dir = (
+        ensure_project_dir(level, project_dir if level == "project" else None)
+        if level == "project"
+        else None
+    )
+
+    try:
+        manager.activate(
+            prompt_id,
+            app_type,
+            level=level,
+            project_dir=level_project_dir,
+        )
+        typer.echo(
+            f"{Colors.GREEN}✓ Enabled '{prompt.name}' for {app_type} ({level}){Colors.RESET}"
+        )
+        file_path = get_prompt_file_path(app_type, level, level_project_dir)
+        typer.echo(f"  {Colors.CYAN}File:{Colors.RESET} {file_path}")
+    except Exception as e:
+        typer.echo(f"{Colors.RED}✗ Error: {e}{Colors.RESET}")
+        raise typer.Exit(1)
+
+
+@prompt_app.command("disable")
+def disable_prompt(
+    prompt_id: str = typer.Argument(..., help="Prompt identifier to disable"),
+):
+    """Disable a prompt.
+
+    This only changes the prompt's status to disabled.
+    It does NOT remove content from any prompt files.
+    Use 'unsync' to clear prompt files.
+    """
+    manager = _get_prompt_manager()
+    prompt = manager.get(prompt_id)
+
+    if not prompt:
+        typer.echo(f"{Colors.RED}✗ Prompt '{prompt_id}' not found{Colors.RESET}")
+        raise typer.Exit(1)
+
+    if not prompt.enabled:
+        typer.echo(
+            f"{Colors.YELLOW}Prompt '{prompt.name}' is already disabled{Colors.RESET}"
+        )
+        return
+
+    try:
+        manager.deactivate(prompt_id)
+        typer.echo(f"{Colors.GREEN}✓ Disabled '{prompt.name}'{Colors.RESET}")
+    except Exception as e:
+        typer.echo(f"{Colors.RED}✗ Error: {e}{Colors.RESET}")
+        raise typer.Exit(1)
+
+
 @prompt_app.command("sync")
 def sync_prompts(
     prompt_id: Optional[str] = typer.Argument(
@@ -204,13 +307,13 @@ def sync_prompts(
         None,
         "--app",
         "-a",
-        help="App type to sync to (claude, codex, gemini). Required if prompt_id is specified.",
+        help="App type to sync to (claude, codex, gemini, copilot). Required if prompt_id is specified.",
     ),
     level: str = typer.Option(
         "user",
         "--level",
         "-l",
-        help="Sync level: 'user' (~/.claude/) or 'project' (current directory)",
+        help="Sync level: 'user' (~/.claude/) or 'project' (current directory). Copilot only supports 'project'.",
     ),
     project_dir: Optional[Path] = typer.Option(
         None,
@@ -223,28 +326,34 @@ def sync_prompts(
         "-e",
         help="Also mark this prompt as active (backs up existing content, disables other prompts for this app)",
     ),
+    # Copilot-specific options
+    apply_to: Optional[str] = typer.Option(
+        None,
+        "--apply-to",
+        help="(Copilot only) Glob pattern for path-specific instructions",
+    ),
+    exclude_agent: Optional[str] = typer.Option(
+        None,
+        "--exclude-agent",
+        help="(Copilot only) Exclude agent: 'coding-agent' or 'code-review'",
+    ),
 ):
     """Sync prompts to app files. Can sync a specific prompt or all active prompts.
+
+    For Claude, Codex, Gemini:
+    - User level syncs to ~/.{app}/ directory
+    - Project level syncs to current directory
+
+    For Copilot (project level only):
+    - Without --apply-to: syncs to .github/copilot-instructions.md (repo-wide)
+    - With --apply-to: syncs to .github/instructions/{id}.instructions.md (path-specific)
 
     Use --enable to also mark the prompt as active, which:
     - Backs up existing prompt file content (if different)
     - Disables other prompts for the same app type (user level only)
     - Marks this prompt as enabled for tracking
     """
-    if level not in VALID_LEVELS:
-        typer.echo(
-            f"{Colors.RED}✗ Invalid level: {level}. Valid: {', '.join(VALID_LEVELS)}{Colors.RESET}"
-        )
-        raise typer.Exit(1)
-
     manager = _get_prompt_manager()
-
-    # Resolve project directory for project level
-    level_project_dir = (
-        ensure_project_dir(level, project_dir if level == "project" else None)
-        if level == "project"
-        else None
-    )
 
     if prompt_id:
         # Sync specific prompt to specific app
@@ -256,10 +365,29 @@ def sync_prompts(
 
         target_app = resolve_single_app(app_type, VALID_APP_TYPES)
 
+        # Handle Copilot specially
+        if target_app == "copilot":
+            _sync_copilot(manager, prompt_id, apply_to, exclude_agent, project_dir)
+            return
+
+        # For non-Copilot apps
+        if level not in VALID_LEVELS:
+            typer.echo(
+                f"{Colors.RED}✗ Invalid level: {level}. Valid: {', '.join(VALID_LEVELS)}{Colors.RESET}"
+            )
+            raise typer.Exit(1)
+
         prompt = manager.get(prompt_id)
         if not prompt:
             typer.echo(f"{Colors.RED}✗ Prompt not found: {prompt_id}{Colors.RESET}")
             raise typer.Exit(1)
+
+        # Resolve project directory for project level
+        level_project_dir = (
+            ensure_project_dir(level, project_dir if level == "project" else None)
+            if level == "project"
+            else None
+        )
 
         file_path = get_prompt_file_path(target_app, level, level_project_dir)
         if not file_path:
@@ -314,13 +442,61 @@ def sync_prompts(
                 typer.echo(f"{Colors.YELLOW}○ {app}: no active prompt{Colors.RESET}")
 
 
+def _sync_copilot(
+    manager: PromptManager,
+    prompt_id: str,
+    apply_to: Optional[str],
+    exclude_agent: Optional[str],
+    project_dir: Optional[Path],
+):
+    """Helper to sync a prompt to Copilot instructions."""
+    prompt = manager.get(prompt_id)
+    if not prompt:
+        typer.echo(f"{Colors.RED}✗ Prompt not found: {prompt_id}{Colors.RESET}")
+        raise typer.Exit(1)
+
+    instruction_type = "path-specific" if apply_to else "repo-wide"
+    target_dir = ensure_project_dir("project", project_dir) if project_dir else None
+
+    try:
+        manager.sync_copilot_instructions(
+            prompt_id,
+            instruction_type=instruction_type,
+            apply_to=apply_to,
+            exclude_agent=exclude_agent,
+            project_dir=target_dir,
+        )
+
+        typer.echo(
+            f"{Colors.GREEN}✓ Synced '{prompt_id}' to Copilot {instruction_type} instructions{Colors.RESET}"
+        )
+
+        if instruction_type == "repo-wide":
+            typer.echo(
+                f"  {Colors.CYAN}File:{Colors.RESET} .github/copilot-instructions.md"
+            )
+        else:
+            typer.echo(
+                f"  {Colors.CYAN}File:{Colors.RESET} .github/instructions/{prompt_id}.instructions.md"
+            )
+            typer.echo(f"  {Colors.CYAN}Apply to:{Colors.RESET} {apply_to}")
+            if exclude_agent:
+                typer.echo(
+                    f"  {Colors.CYAN}Exclude agent:{Colors.RESET} {exclude_agent}"
+                )
+
+    except ValueError as e:
+        typer.echo(f"{Colors.RED}✗ Error: {e}{Colors.RESET}")
+        raise typer.Exit(1)
+
+
 @prompt_app.command("import-live")
 def import_live_prompt(
     app_type: str = typer.Option(
         "claude",
         "--app",
         "-a",
-        help="App type to import from (claude, codex, gemini, all)",
+        help="App type to import from (claude, codex, gemini, copilot, all)",
     ),
     name: Optional[str] = typer.Option(
         None, "--name", "-n", help="Name for the imported prompt"
@@ -329,7 +505,7 @@ def import_live_prompt(
         "user",
         "--level",
         "-l",
-        help="Prompt level to import from: 'user', 'project', or 'all'",
+        help="Prompt level to import from: 'user', 'project', or 'all'. Copilot only supports 'project'.",
     ),
     project_dir: Optional[Path] = typer.Option(
         None,
@@ -337,7 +513,10 @@ def import_live_prompt(
         help="Project directory when using project level (defaults to current directory)",
     ),
 ):
-    """Import the current live prompt file as a new prompt."""
+    """Import the current live prompt file as a new prompt.
+
+    For Copilot, imports from .github/copilot-instructions.md
+    """
     target_apps = resolve_app_targets(app_type, VALID_APP_TYPES, default="claude")
     target_levels = resolve_level_targets(level, VALID_LEVELS, default="user")
 
@@ -352,6 +531,13 @@ def import_live_prompt(
         )
 
         for app in target_apps:
+            # Handle Copilot specially - only project level
+            if app == "copilot":
+                if lvl == "user":
+                    continue  # Skip user level for Copilot
+                _import_copilot(manager, name, lvl_project_dir)
+                continue
+
             prompt_name = name
             if name and multiple:
                 prompt_name = f"{name} ({app}-{lvl})"
@@ -376,19 +562,46 @@ def import_live_prompt(
                 )
 
 
+def _import_copilot(
+    manager: PromptManager,
+    name: Optional[str],
+    project_dir: Optional[Path],
+):
+    """Helper to import Copilot instructions."""
+    try:
+        prompt_id = manager.import_copilot_instructions(
+            instruction_type="repo-wide",
+            name=name,
+            project_dir=project_dir,
+        )
+
+        if prompt_id:
+            typer.echo(f"{Colors.GREEN}✓ Prompt imported: {prompt_id}{Colors.RESET}")
+            typer.echo(
+                f"  {Colors.CYAN}From:{Colors.RESET} .github/copilot-instructions.md"
+            )
+        else:
+            typer.echo(
+                f"{Colors.YELLOW}No content to import from Copilot instructions{Colors.RESET}"
+            )
+
+    except Exception as e:
+        typer.echo(f"{Colors.RED}✗ Error: {e}{Colors.RESET}")
+
+
 @prompt_app.command("show-live")
 def show_live_prompt(
     app_type: str = typer.Option(
         "claude",
         "--app",
         "-a",
-        help="App type to show (claude, codex, gemini, all)",
+        help="App type to show (claude, codex, gemini, copilot, all)",
     ),
     level: str = typer.Option(
         "user",
         "--level",
         "-l",
-        help="Prompt level to show: 'user', 'project', or 'all'",
+        help="Prompt level to show: 'user', 'project', or 'all'. Copilot only supports 'project'.",
     ),
     project_dir: Optional[Path] = typer.Option(
         None,
@@ -396,7 +609,10 @@ def show_live_prompt(
         help="Project directory when showing project prompts (defaults to current directory)",
     ),
 ):
-    """Show the current live prompt file content."""
+    """Show the current live prompt file content.
+
+    For Copilot, shows content from .github/copilot-instructions.md
+    """
     target_apps = resolve_app_targets(app_type, VALID_APP_TYPES, default="claude")
     target_levels = resolve_level_targets(level, VALID_LEVELS, default="user")
 
@@ -410,6 +626,13 @@ def show_live_prompt(
         )
 
         for app in target_apps:
+            # Handle Copilot specially - only project level
+            if app == "copilot":
+                if lvl == "user":
+                    continue  # Skip user level for Copilot
+                _show_copilot(manager, lvl_project_dir)
+                continue
+
             content = manager.get_live_content(
                 app, level=lvl, project_dir=lvl_project_dir
             )
@@ -427,6 +650,23 @@ def show_live_prompt(
                 )
 
     typer.echo()
+
+
+def _show_copilot(manager: PromptManager, project_dir: Optional[Path]):
+    """Helper to show Copilot instructions."""
+    content = manager.get_copilot_instructions(project_dir=project_dir)
+
+    base_dir = project_dir or Path.cwd()
+    file_path = base_dir / ".github" / "copilot-instructions.md"
+
+    typer.echo(f"\n{Colors.BOLD}Live prompt for copilot:{Colors.RESET}")
+    typer.echo(f"{Colors.CYAN}Level:{Colors.RESET} project")
+    typer.echo(f"{Colors.CYAN}File:{Colors.RESET} {file_path}\n")
+
+    if content:
+        typer.echo(content)
+    else:
+        typer.echo(f"{Colors.YELLOW}(No content or file does not exist){Colors.RESET}")
 
 
 @prompt_app.command("import")
@@ -469,13 +709,13 @@ def unsync_prompt(
         ...,
         "--app",
         "-a",
-        help="App type to unsync (claude, codex, gemini, all)",
+        help="App type to unsync (claude, codex, gemini, copilot, all)",
     ),
     level: str = typer.Option(
         "user",
         "--level",
         "-l",
-        help="Unsync level: 'user', 'project', or 'all'",
+        help="Unsync level: 'user', 'project', or 'all'. Copilot only supports 'project'.",
     ),
     force: bool = typer.Option(False, "--force", "-f", help="Skip confirmation"),
     project_dir: Optional[Path] = typer.Option(
@@ -494,11 +734,15 @@ def unsync_prompt(
 
     By default, also disables any prompts that were active for the unsynced app.
     Use --no-disable to only clear the file without changing prompt states.
+
+    For Copilot, clears .github/copilot-instructions.md
     """
     target_apps = resolve_app_targets(app_type, VALID_APP_TYPES)
     target_levels = resolve_level_targets(level, VALID_LEVELS, default="user")
 
     targets = []
+    copilot_targets = []
+
     for lvl in target_levels:
         lvl_project_dir = (
             ensure_project_dir(lvl, project_dir if lvl == "project" else None)
@@ -506,22 +750,33 @@ def unsync_prompt(
             else None
         )
         for app in target_apps:
+            if app == "copilot":
+                if lvl == "project":
+                    base_dir = lvl_project_dir or Path.cwd()
+                    copilot_path = base_dir / ".github" / "copilot-instructions.md"
+                    copilot_targets.append(
+                        ("copilot", lvl, copilot_path, lvl_project_dir)
+                    )
+                continue
+
             file_path = get_prompt_file_path(app, lvl, lvl_project_dir)
             if not file_path:
                 continue
             targets.append((app, lvl, file_path, lvl_project_dir))
 
-    if not targets:
+    all_targets = targets + copilot_targets
+
+    if not all_targets:
         typer.echo(f"{Colors.YELLOW}No matching prompt files found{Colors.RESET}")
         return
 
     if not force:
-        summary = ", ".join(f"{app}:{lvl}" for app, lvl, *_ in targets)
+        summary = ", ".join(f"{app}:{lvl}" for app, lvl, *_ in all_targets)
         typer.confirm(f"Clear prompt files for {summary}?", abort=True)
 
     manager = _get_prompt_manager()
 
-    for app, lvl, file_path, _ in targets:
+    for app, lvl, file_path, _ in all_targets:
         if not file_path.exists():
             typer.echo(
                 f"{Colors.YELLOW}Prompt file does not exist: {file_path}{Colors.RESET}"
@@ -534,7 +789,7 @@ def unsync_prompt(
                 f"{Colors.GREEN}✓ Cleared prompt file: {file_path}{Colors.RESET}"
             )
 
-            if disable and lvl == "user":
+            if disable and lvl == "user" and app != "copilot":
                 prompts = manager.get_all()
                 for prompt in prompts.values():
                     if prompt.enabled and prompt.app_type == app:
@@ -556,6 +811,11 @@ def show_prompt_status(
         "-l",
         help="Show status for: 'user', 'project', or 'all' (default)",
     ),
+    project_dir: Optional[Path] = typer.Option(
+        None,
+        "--project-dir",
+        help="Project directory for project level status (defaults to current directory)",
+    ),
 ):
     """Show prompt status for all apps."""
     manager = _get_prompt_manager()
@@ -567,8 +827,18 @@ def show_prompt_status(
             f"\n{Colors.BOLD}Prompt Status ({lvl.capitalize()} Level):{Colors.RESET}\n"
         )
 
-        for app_type in VALID_APP_TYPES:
-            file_path = get_prompt_file_path(app_type, lvl)
+        # Determine which apps to show for this level
+        apps_for_level = USER_LEVEL_APPS if lvl == "user" else VALID_APP_TYPES
+
+        for app_type in apps_for_level:
+            # Handle Copilot specially
+            if app_type == "copilot":
+                _show_copilot_status(manager, project_dir)
+                continue
+
+            file_path = get_prompt_file_path(
+                app_type, lvl, project_dir if lvl == "project" else None
+            )
 
             typer.echo(f"{Colors.BOLD}{app_type.capitalize()}:{Colors.RESET}")
             typer.echo(f"  {Colors.CYAN}File:{Colors.RESET} {file_path}")
@@ -596,6 +866,38 @@ def show_prompt_status(
                     typer.echo(f"  {Colors.YELLOW}Active Prompt:{Colors.RESET} None")
 
             typer.echo()
+
+
+def _show_copilot_status(manager: PromptManager, project_dir: Optional[Path]):
+    """Helper to show Copilot status."""
+    base_dir = project_dir or Path.cwd()
+    file_path = base_dir / ".github" / "copilot-instructions.md"
+
+    typer.echo(f"{Colors.BOLD}Copilot:{Colors.RESET}")
+    typer.echo(f"  {Colors.CYAN}File:{Colors.RESET} {file_path}")
+
+    if file_path.exists():
+        content = file_path.read_text(encoding="utf-8")
+        if content.strip():
+            lines = content.strip().split("\n")
+            preview = lines[0][:50] + "..." if len(lines[0]) > 50 else lines[0]
+            typer.echo(f"  {Colors.GREEN}Content:{Colors.RESET} {preview}")
+            typer.echo(f"  {Colors.CYAN}Lines:{Colors.RESET} {len(lines)}")
+        else:
+            typer.echo(f"  {Colors.YELLOW}Content:{Colors.RESET} (empty)")
+    else:
+        typer.echo(f"  {Colors.YELLOW}Content:{Colors.RESET} (file not found)")
+
+    # Check for path-specific instructions
+    instructions_dir = base_dir / ".github" / "instructions"
+    if instructions_dir.exists():
+        instruction_files = list(instructions_dir.glob("*.instructions.md"))
+        if instruction_files:
+            typer.echo(
+                f"  {Colors.CYAN}Path-specific:{Colors.RESET} {len(instruction_files)} file(s)"
+            )
+
+    typer.echo()
 
 
 # Add list shorthand

@@ -1,137 +1,83 @@
-"""Prompt management for Code Assistant Manager.
-
-This module provides functionality to manage prompts for AI coding assistants.
-Prompts can be synced to the actual tool config files at user or project level:
-
-User level (default):
-- Claude: ~/.claude/CLAUDE.md
-- Codex: ~/.codex/AGENTS.md
-- Gemini: ~/.gemini/GEMINI.md
-
-Project level (current directory):
-- Claude: ./CLAUDE.md
-- Codex: ./AGENTS.md
-- Gemini: ./GEMINI.md
-"""
+"""Prompt manager that coordinates all tool-specific handlers."""
 
 import json
 import logging
-import os
-import shutil
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Type
+
+from .base import BasePromptHandler
+from .claude import ClaudePromptHandler
+from .codex import CodexPromptHandler
+from .copilot import CopilotPromptHandler
+from .gemini import GeminiPromptHandler
+from .models import Prompt
 
 logger = logging.getLogger(__name__)
 
-# User-level prompt file paths for each app type
-USER_PROMPT_FILE_PATHS = {
-    "claude": Path.home() / ".claude" / "CLAUDE.md",
-    "codex": Path.home() / ".codex" / "AGENTS.md",
-    "gemini": Path.home() / ".gemini" / "GEMINI.md",
+# Registry of all available prompt handlers
+PROMPT_HANDLERS: Dict[str, Type[BasePromptHandler]] = {
+    "claude": ClaudePromptHandler,
+    "codex": CodexPromptHandler,
+    "gemini": GeminiPromptHandler,
+    "copilot": CopilotPromptHandler,
 }
 
-# Project-level prompt file names for each app type
-PROJECT_PROMPT_FILE_NAMES = {
-    "claude": "CLAUDE.md",
-    "codex": "AGENTS.md",
-    "gemini": "GEMINI.md",
-}
-
-# Keep for backward compatibility
-PROMPT_FILE_PATHS = USER_PROMPT_FILE_PATHS
+# Valid app types
+VALID_APP_TYPES = list(PROMPT_HANDLERS.keys())
 
 
-def get_prompt_file_path(
-    app_type: str, level: str = "user", project_dir: Optional[Path] = None
-) -> Optional[Path]:
-    """
-    Get the prompt file path for an app type at the specified level.
-
-    Args:
-        app_type: The app type (claude, codex, gemini)
-        level: Either "user" or "project"
-        project_dir: Project directory (defaults to current working directory)
-
-    Returns:
-        Path to the prompt file, or None if invalid
-    """
-    if level == "user":
-        return USER_PROMPT_FILE_PATHS.get(app_type)
-    elif level == "project":
-        filename = PROJECT_PROMPT_FILE_NAMES.get(app_type)
-        if not filename:
-            return None
-        if project_dir is None:
-            project_dir = Path.cwd()
-        return project_dir / filename
-    return None
-
-
-class Prompt:
-    """Represents a prompt configuration."""
-
-    def __init__(
-        self,
-        id: str,
-        name: str,
-        content: str,
-        description: Optional[str] = None,
-        enabled: bool = False,
-        app_type: Optional[str] = None,
-        created_at: Optional[int] = None,
-        updated_at: Optional[int] = None,
-    ):
-        self.id = id
-        self.name = name
-        self.content = content
-        self.description = description
-        self.enabled = enabled
-        self.app_type = app_type  # claude, codex, gemini, or None for all
-        self.created_at = created_at or int(datetime.now().timestamp() * 1000)
-        self.updated_at = updated_at or int(datetime.now().timestamp() * 1000)
-
-    def to_dict(self) -> Dict:
-        """Convert to dictionary."""
-        data = {
-            "id": self.id,
-            "name": self.name,
-            "content": self.content,
-            "enabled": self.enabled,
-            "createdAt": self.created_at,
-            "updatedAt": self.updated_at,
-        }
-        if self.description:
-            data["description"] = self.description
-        if self.app_type:
-            data["appType"] = self.app_type
-        return data
-
-    @classmethod
-    def from_dict(cls, data: Dict) -> "Prompt":
-        """Create from dictionary."""
-        return cls(
-            id=data["id"],
-            name=data["name"],
-            content=data["content"],
-            description=data.get("description"),
-            enabled=data.get("enabled", False),
-            app_type=data.get("appType"),
-            created_at=data.get("createdAt"),
-            updated_at=data.get("updatedAt"),
-        )
+def get_handler(app_type: str) -> BasePromptHandler:
+    """Get a prompt handler instance for the specified app type."""
+    handler_class = PROMPT_HANDLERS.get(app_type)
+    if not handler_class:
+        raise ValueError(f"Unknown app type: {app_type}. Valid: {VALID_APP_TYPES}")
+    return handler_class()
 
 
 class PromptManager:
-    """Manages prompts storage and retrieval."""
+    """Manages prompts storage and retrieval across all tools."""
 
-    def __init__(self, config_dir: Optional[Path] = None):
-        """Initialize prompt manager."""
+    def __init__(
+        self,
+        config_dir: Optional[Path] = None,
+        handler_overrides: Optional[Dict[str, Dict]] = None,
+    ):
+        """Initialize prompt manager.
+
+        Args:
+            config_dir: Configuration directory for prompt storage
+            handler_overrides: Dict of app_type -> {'user_path': Path, 'project_filename': str}
+                              for testing purposes
+        """
         if config_dir is None:
             config_dir = Path.home() / ".config" / "code-assistant-manager"
         self.config_dir = Path(config_dir)
         self.prompts_file = self.config_dir / "prompts.json"
         self.config_dir.mkdir(parents=True, exist_ok=True)
+
+        # Initialize handlers with optional overrides
+        self._handlers: Dict[str, BasePromptHandler] = {}
+        for name, cls in PROMPT_HANDLERS.items():
+            overrides = (handler_overrides or {}).get(name, {})
+            self._handlers[name] = cls(
+                user_path_override=overrides.get("user_path"),
+                project_filename_override=overrides.get("project_filename"),
+            )
+
+    def get_handler(self, app_type: str) -> BasePromptHandler:
+        """Get the handler for a specific app type."""
+        handler = self._handlers.get(app_type)
+        if not handler:
+            raise ValueError(f"Unknown app type: {app_type}. Valid: {VALID_APP_TYPES}")
+        return handler
+
+    @property
+    def copilot(self) -> CopilotPromptHandler:
+        """Get the Copilot handler for Copilot-specific operations."""
+        return self._handlers["copilot"]  # type: ignore
+
+    # ==================== Prompt Storage Operations ====================
 
     def _load_prompts(self) -> Dict[str, Prompt]:
         """Load prompts from file."""
@@ -251,6 +197,8 @@ class PromptManager:
             logger.error(f"Failed to export prompts: {e}")
             raise
 
+    # ==================== Tool Sync Operations ====================
+
     def activate(
         self,
         prompt_id: str,
@@ -263,21 +211,25 @@ class PromptManager:
 
         Args:
             prompt_id: The prompt identifier
-            app_type: The app type (claude, codex, gemini)
+            app_type: The app type (claude, codex, gemini, copilot)
             level: Target scope ("user" or "project")
             project_dir: Project directory when targeting project scope
         """
         if level not in ("user", "project"):
             raise ValueError(f"Invalid level: {level}")
 
+        handler = self.get_handler(app_type)
         prompts = self._load_prompts()
+
         if prompt_id not in prompts:
             raise ValueError(f"Prompt with id '{prompt_id}' not found")
 
         prompt = prompts[prompt_id]
-        target_file = get_prompt_file_path(app_type, level, project_dir)
+
+        # Check if level is supported
+        target_file = handler.get_prompt_file_path(level, project_dir)
         if not target_file:
-            raise ValueError(f"Unknown app type: {app_type}")
+            raise ValueError(f"Tool '{app_type}' does not support level '{level}'")
 
         # Backup existing prompt content from the live file first
         self._backup_live_prompt(app_type, level, project_dir)
@@ -298,8 +250,8 @@ class PromptManager:
             if not prompt.app_type:
                 prompt.app_type = app_type
 
-        # Sync to the target prompt file
-        self._sync_prompt_to_file(prompt.content, app_type, level, project_dir)
+        # Sync to the target prompt file using the handler
+        handler.sync_prompt(prompt.content, level, project_dir)
 
         # Save changes (updates timestamps and activation state)
         self._save_prompts(prompts)
@@ -308,12 +260,7 @@ class PromptManager:
         )
 
     def deactivate(self, prompt_id: str) -> None:
-        """
-        Deactivate a prompt.
-
-        Args:
-            prompt_id: The prompt identifier
-        """
+        """Deactivate a prompt."""
         prompts = self._load_prompts()
         if prompt_id not in prompts:
             raise ValueError(f"Prompt with id '{prompt_id}' not found")
@@ -325,58 +272,16 @@ class PromptManager:
         self._save_prompts(prompts)
         logger.info(f"Deactivated prompt: {prompt_id}")
 
-    def _sync_prompt_to_file(
-        self,
-        content: str,
-        app_type: str,
-        level: str = "user",
-        project_dir: Optional[Path] = None,
-    ) -> None:
-        """
-        Write prompt content to the app's prompt file.
-
-        Args:
-            content: The prompt content
-            app_type: The app type (claude, codex, gemini)
-            level: Target scope ("user" or "project")
-            project_dir: Project directory when targeting project scope
-        """
-        file_path = get_prompt_file_path(app_type, level, project_dir)
-        if not file_path:
-            raise ValueError(f"Unknown app type: {app_type}")
-
-        # Ensure parent directory exists
-        file_path.parent.mkdir(parents=True, exist_ok=True)
-
-        # Write atomically using temp file
-        temp_path = file_path.with_suffix(".tmp")
-        try:
-            temp_path.write_text(content, encoding="utf-8")
-            temp_path.replace(file_path)
-            logger.info(f"Synced prompt to: {file_path}")
-        except Exception:
-            if temp_path.exists():
-                temp_path.unlink()
-            raise
-
     def _backup_live_prompt(
         self,
         app_type: str,
         level: str = "user",
         project_dir: Optional[Path] = None,
     ) -> Optional[str]:
-        """
-        Backup the current live prompt file content.
+        """Backup the current live prompt file content."""
+        handler = self.get_handler(app_type)
+        file_path = handler.get_prompt_file_path(level, project_dir)
 
-        Args:
-            app_type: The app type (claude, codex, gemini)
-            level: Target scope ("user" or "project")
-            project_dir: Project directory when targeting project scope
-
-        Returns:
-            The prompt ID if a backup was created, None otherwise
-        """
-        file_path = get_prompt_file_path(app_type, level, project_dir)
         if not file_path or not file_path.exists():
             return None
 
@@ -430,26 +335,9 @@ class PromptManager:
         level: str = "user",
         project_dir: Optional[Path] = None,
     ) -> Optional[str]:
-        """
-        Get the current content of the app's prompt file.
-
-        Args:
-            app_type: The app type (claude, codex, gemini)
-            level: Prompt level ("user" or "project")
-            project_dir: Optional project directory for project level prompts
-
-        Returns:
-            The content of the prompt file, or None if it doesn't exist
-        """
-        file_path = get_prompt_file_path(app_type, level, project_dir)
-        if not file_path or not file_path.exists():
-            return None
-
-        try:
-            return file_path.read_text(encoding="utf-8")
-        except Exception as e:
-            logger.warning(f"Failed to read live prompt: {e}")
-            return None
+        """Get the current content of the app's prompt file."""
+        handler = self.get_handler(app_type)
+        return handler.get_live_content(level, project_dir)
 
     def import_from_live(
         self,
@@ -458,30 +346,15 @@ class PromptManager:
         level: str = "user",
         project_dir: Optional[Path] = None,
     ) -> Optional[str]:
-        """
-        Import the current live prompt file as a new prompt.
+        """Import the current live prompt file as a new prompt."""
+        handler = self.get_handler(app_type)
+        result = handler.import_from_live(level, project_dir)
 
-        Args:
-            app_type: The app type (claude, codex, gemini)
-            name: Optional name for the imported prompt
-            level: Prompt level ("user" or "project")
-            project_dir: Optional project directory for project level prompts
-
-        Returns:
-            The prompt ID if import was successful, None otherwise
-        """
-        file_path = get_prompt_file_path(app_type, level, project_dir)
-        if not file_path or not file_path.exists():
+        if not result:
             return None
 
-        try:
-            content = file_path.read_text(encoding="utf-8")
-        except Exception as e:
-            logger.warning(f"Failed to read prompt file {file_path}: {e}")
-            return None
-
-        if not content or not content.strip():
-            return None
+        content = result["content"]
+        file_path = result["file_path"]
 
         prompts = self._load_prompts()
         stripped_content = content.strip()
@@ -517,15 +390,7 @@ class PromptManager:
         return prompt_id
 
     def get_active_prompt(self, app_type: str) -> Optional[Prompt]:
-        """
-        Get the currently active prompt for an app type.
-
-        Args:
-            app_type: The app type (claude, codex, gemini)
-
-        Returns:
-            The active prompt, or None if no prompt is active
-        """
+        """Get the currently active prompt for an app type."""
         prompts = self._load_prompts()
         for prompt in prompts.values():
             if prompt.enabled and (
@@ -535,16 +400,15 @@ class PromptManager:
         return None
 
     def sync_all(self) -> Dict[str, Optional[str]]:
-        """
-        Sync all active prompts to their respective app files.
-
-        Returns:
-            Dictionary mapping app types to prompt ID synced (or None if no prompt)
-        """
+        """Sync all active prompts to their respective app files."""
         prompts = self._load_prompts()
         results = {}
 
-        for app_type in PROMPT_FILE_PATHS.keys():
+        # Only sync to tools that support user-level prompts
+        for app_type, handler in self._handlers.items():
+            if not handler.user_prompt_path:
+                continue
+
             # Find active prompt for this app type
             active_prompt = None
             for prompt in prompts.values():
@@ -556,7 +420,7 @@ class PromptManager:
 
             if active_prompt:
                 try:
-                    self._sync_prompt_to_file(active_prompt.content, app_type)
+                    handler.sync_prompt(active_prompt.content, "user")
                     results[app_type] = active_prompt.id
                 except Exception as e:
                     logger.error(f"Failed to sync prompt to {app_type}: {e}")
@@ -565,3 +429,119 @@ class PromptManager:
                 results[app_type] = None  # No active prompt
 
         return results
+
+    # ==================== Copilot-Specific Operations ====================
+
+    def sync_copilot_instructions(
+        self,
+        prompt_id: str,
+        instruction_type: str = "repo-wide",
+        apply_to: Optional[str] = None,
+        exclude_agent: Optional[str] = None,
+        project_dir: Optional[Path] = None,
+    ) -> None:
+        """
+        Sync a prompt to Copilot instructions file.
+
+        Args:
+            prompt_id: The prompt identifier
+            instruction_type: "repo-wide" or "path-specific"
+            apply_to: Glob pattern (required for path-specific)
+            exclude_agent: Optional agent to exclude
+            project_dir: Project directory (defaults to current working directory)
+        """
+        if project_dir is None:
+            project_dir = Path.cwd()
+
+        prompts = self._load_prompts()
+        if prompt_id not in prompts:
+            raise ValueError(f"Prompt with id '{prompt_id}' not found")
+
+        prompt = prompts[prompt_id]
+        prompt.instruction_type = instruction_type
+        prompt.apply_to = apply_to
+        prompt.exclude_agent = exclude_agent
+
+        copilot = self.copilot
+
+        if instruction_type == "repo-wide":
+            copilot.sync_repo_wide(prompt.content, project_dir)
+        elif instruction_type == "path-specific":
+            if not apply_to:
+                raise ValueError("apply_to is required for path-specific instructions")
+            copilot.sync_path_specific(
+                prompt.id, prompt.content, apply_to, exclude_agent, project_dir
+            )
+        else:
+            raise ValueError(f"Unknown instruction type: {instruction_type}")
+
+        prompt.updated_at = int(datetime.now().timestamp() * 1000)
+        self._save_prompts(prompts)
+        logger.info(
+            f"Synced prompt {prompt_id} to Copilot {instruction_type} instructions"
+        )
+
+    def import_copilot_instructions(
+        self,
+        instruction_type: str = "repo-wide",
+        name: Optional[str] = None,
+        project_dir: Optional[Path] = None,
+    ) -> Optional[str]:
+        """Import Copilot instructions as a new prompt."""
+        if project_dir is None:
+            project_dir = Path.cwd()
+
+        if instruction_type != "repo-wide":
+            raise ValueError(
+                "Only 'repo-wide' import is supported. For path-specific, import individual files."
+            )
+
+        result = self.copilot.import_repo_wide(project_dir)
+        if not result:
+            return None
+
+        content = result["content"]
+        file_path = result["file_path"]
+
+        prompts = self._load_prompts()
+        stripped_content = content.strip()
+        for prompt in prompts.values():
+            if (
+                prompt.content.strip() == stripped_content
+                and prompt.instruction_type == instruction_type
+            ):
+                logger.info(
+                    "Copilot instructions already stored as prompt %s", prompt.id
+                )
+                return prompt.id
+
+        timestamp = int(datetime.now().timestamp())
+        prompt_id = f"copilot-{instruction_type}-{timestamp}"
+
+        if not name:
+            name = f"Copilot {instruction_type} instructions ({datetime.now().strftime('%Y-%m-%d %H:%M')})"
+
+        prompt = Prompt(
+            id=prompt_id,
+            name=name,
+            content=content,
+            description=f"Imported from {file_path}",
+            enabled=False,
+            instruction_type=instruction_type,
+        )
+
+        prompts[prompt_id] = prompt
+        self._save_prompts(prompts)
+
+        logger.info(f"Imported Copilot instructions: {prompt_id}")
+        return prompt_id
+
+    def get_copilot_instructions(
+        self, project_dir: Optional[Path] = None, instruction_type: str = "repo-wide"
+    ) -> Optional[str]:
+        """Get current Copilot instructions content from file."""
+        if instruction_type == "repo-wide":
+            return self.copilot.get_repo_wide_content(project_dir)
+        else:
+            # For path-specific, just return the directory path info
+            return None

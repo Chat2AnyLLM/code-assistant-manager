@@ -15,19 +15,27 @@ def cli_manager(tmp_path, monkeypatch):
     return manager
 
 
-def _prepare_user_files(tmp_path, monkeypatch):
-    """Patch user-level prompt paths to temporary files."""
-    from code_assistant_manager import prompts as prompts_module
-
+def _prepare_user_files(tmp_path, monkeypatch, manager):
+    """Create temporary user-level prompt files and configure manager handlers."""
     user_files = {}
+    handler_overrides = {}
+
     for app in prompts_commands.VALID_APP_TYPES:
         file_path = tmp_path / f"user_{app}.md"
         file_path.write_text(f"user content {app}")
         user_files[app] = file_path
+        handler_overrides[app] = {"user_path": file_path}
 
-    monkeypatch.setattr(prompts_module, "USER_PROMPT_FILE_PATHS", user_files)
-    monkeypatch.setattr(prompts_module, "PROMPT_FILE_PATHS", user_files)
-    monkeypatch.setattr(prompts_commands, "PROMPT_FILE_PATHS", user_files)
+    # Update the manager's handlers with the new paths
+    from code_assistant_manager.prompts import PROMPT_HANDLERS
+
+    for name, cls in PROMPT_HANDLERS.items():
+        overrides = handler_overrides.get(name, {})
+        manager._handlers[name] = cls(
+            user_path_override=overrides.get("user_path"),
+            project_filename_override=overrides.get("project_filename"),
+        )
+
     return user_files
 
 
@@ -84,7 +92,7 @@ def test_show_live_project_level(cli_manager, tmp_path, monkeypatch):
 
 def test_import_live_all_apps_levels(cli_manager, tmp_path, monkeypatch):
     """import-live supports app=all and level=all."""
-    _prepare_user_files(tmp_path, monkeypatch)
+    _prepare_user_files(tmp_path, monkeypatch, cli_manager)
 
     project_dir = tmp_path / "project"
     project_dir.mkdir()
@@ -108,11 +116,15 @@ def test_import_live_all_apps_levels(cli_manager, tmp_path, monkeypatch):
     )
 
     prompts = cli_manager.get_all()
-    assert len(prompts) == len(prompts_commands.VALID_APP_TYPES) * len(
+    # claude, codex, gemini: user + project = 6
+    # copilot: only project (skipped because no copilot instructions file)
+    # So total = 6 (not 8) when copilot file doesn't exist
+    expected_count = len(prompts_commands.USER_LEVEL_APPS) * len(
         prompts_commands.VALID_LEVELS
     )
+    assert len(prompts) == expected_count
     combined = "\n".join(outputs)
-    for app in prompts_commands.VALID_APP_TYPES:
+    for app in prompts_commands.USER_LEVEL_APPS:
         assert app in combined
     assert "project" in combined
     assert "user" in combined
@@ -120,7 +132,7 @@ def test_import_live_all_apps_levels(cli_manager, tmp_path, monkeypatch):
 
 def test_show_live_all_apps_levels(cli_manager, tmp_path, monkeypatch):
     """show-live prints every app/level combo when 'all' specified."""
-    _prepare_user_files(tmp_path, monkeypatch)
+    _prepare_user_files(tmp_path, monkeypatch, cli_manager)
 
     project_dir = tmp_path / "project"
     project_dir.mkdir()
@@ -144,7 +156,8 @@ def test_show_live_all_apps_levels(cli_manager, tmp_path, monkeypatch):
     )
 
     combined = "\n".join(outputs)
-    for app in prompts_commands.VALID_APP_TYPES:
+    # Check user-level apps appear (copilot only shows at project level)
+    for app in prompts_commands.USER_LEVEL_APPS:
         assert f"Live prompt for {app}" in combined
     assert combined.count("Level:") >= 2
 
@@ -181,13 +194,19 @@ def test_sync_prompt_project_scope(cli_manager, tmp_path, monkeypatch):
 
 def test_sync_prompt_with_enable(cli_manager, tmp_path, monkeypatch):
     """sync --enable marks the prompt as active and syncs it."""
-    from code_assistant_manager import prompts as prompts_module
+    from code_assistant_manager.prompts import PROMPT_HANDLERS
 
     # Setup user-level file path
     user_claude_file = tmp_path / "user_claude.md"
-    user_files = {"claude": user_claude_file}
-    monkeypatch.setattr(prompts_module, "USER_PROMPT_FILE_PATHS", user_files)
-    monkeypatch.setattr(prompts_module, "PROMPT_FILE_PATHS", user_files)
+
+    # Update manager's handler with the new path
+    handler_overrides = {"claude": {"user_path": user_claude_file}}
+    for name, cls in PROMPT_HANDLERS.items():
+        overrides = handler_overrides.get(name, {})
+        cli_manager._handlers[name] = cls(
+            user_path_override=overrides.get("user_path"),
+            project_filename_override=overrides.get("project_filename"),
+        )
 
     prompt = Prompt(id="test", name="Test", content="test content")
     cli_manager.create(prompt)
@@ -212,3 +231,108 @@ def test_sync_prompt_with_enable(cli_manager, tmp_path, monkeypatch):
     assert stored.enabled is True
     assert stored.app_type == "claude"
     assert any("enabled" in msg.lower() for msg in outputs)
+
+
+def test_enable_prompt(cli_manager, tmp_path, monkeypatch):
+    """enable command activates a prompt and syncs it."""
+    from code_assistant_manager.prompts import PROMPT_HANDLERS
+
+    # Setup user-level file path
+    user_claude_file = tmp_path / "user_claude.md"
+
+    # Update manager's handler with the new path
+    for name, cls in PROMPT_HANDLERS.items():
+        overrides = {"user_path": user_claude_file} if name == "claude" else {}
+        cli_manager._handlers[name] = cls(
+            user_path_override=overrides.get("user_path"),
+        )
+
+    prompt = Prompt(id="test-enable", name="Test Enable", content="enable content")
+    cli_manager.create(prompt)
+
+    outputs = []
+    monkeypatch.setattr(
+        prompts_commands.typer, "echo", lambda msg="": outputs.append(str(msg))
+    )
+
+    prompts_commands.enable_prompt(
+        prompt_id="test-enable",
+        app_type="claude",
+        level="user",
+        project_dir=None,
+    )
+
+    assert user_claude_file.exists()
+    assert user_claude_file.read_text() == "enable content"
+
+    stored = cli_manager.get("test-enable")
+    assert stored.enabled is True
+    assert stored.app_type == "claude"
+    assert any("enabled" in msg.lower() for msg in outputs)
+
+
+def test_disable_prompt(cli_manager, tmp_path, monkeypatch):
+    """disable command deactivates a prompt."""
+    # Create and enable a prompt first
+    prompt = Prompt(
+        id="test-disable",
+        name="Test Disable",
+        content="disable content",
+        enabled=True,
+        app_type="claude",
+    )
+    cli_manager.create(prompt)
+
+    outputs = []
+    monkeypatch.setattr(
+        prompts_commands.typer, "echo", lambda msg="": outputs.append(str(msg))
+    )
+
+    prompts_commands.disable_prompt(prompt_id="test-disable")
+
+    stored = cli_manager.get("test-disable")
+    assert stored.enabled is False
+    assert any("disabled" in msg.lower() for msg in outputs)
+
+
+def test_disable_already_disabled_prompt(cli_manager, tmp_path, monkeypatch):
+    """disable command shows warning for already disabled prompt."""
+    prompt = Prompt(
+        id="test-already-disabled",
+        name="Already Disabled",
+        content="content",
+        enabled=False,
+    )
+    cli_manager.create(prompt)
+
+    outputs = []
+    monkeypatch.setattr(
+        prompts_commands.typer, "echo", lambda msg="": outputs.append(str(msg))
+    )
+
+    prompts_commands.disable_prompt(prompt_id="test-already-disabled")
+
+    assert any("already disabled" in msg.lower() for msg in outputs)
+
+
+def test_enable_prompt_invalid_app(cli_manager, tmp_path, monkeypatch):
+    """enable command rejects invalid app types like copilot."""
+    from click.exceptions import Exit
+
+    prompt = Prompt(id="test-invalid-app", name="Test", content="content")
+    cli_manager.create(prompt)
+
+    outputs = []
+    monkeypatch.setattr(
+        prompts_commands.typer, "echo", lambda msg="": outputs.append(str(msg))
+    )
+
+    with pytest.raises(Exit):
+        prompts_commands.enable_prompt(
+            prompt_id="test-invalid-app",
+            app_type="copilot",  # copilot doesn't support enable
+            level="user",
+            project_dir=None,
+        )
+
+    assert any("invalid" in msg.lower() for msg in outputs)

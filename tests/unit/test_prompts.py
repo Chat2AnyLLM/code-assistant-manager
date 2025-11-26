@@ -222,35 +222,32 @@ class TestPromptActivation:
 
     def test_activate_prompt(self, temp_config_dir, temp_prompt_dir):
         """Test activating a prompt syncs to file."""
-        manager = PromptManager(temp_config_dir)
+        prompt_file = temp_prompt_dir / "CLAUDE.md"
+        manager = PromptManager(
+            temp_config_dir,
+            handler_overrides={"claude": {"user_path": prompt_file}},
+        )
         prompt = Prompt(id="test", name="Test", content="My test content")
         manager.create(prompt)
 
-        prompt_file = temp_prompt_dir / "CLAUDE.md"
-        with (
-            patch.dict(
-                "code_assistant_manager.prompts.USER_PROMPT_FILE_PATHS",
-                {"claude": prompt_file},
-            ),
-            patch.dict(
-                "code_assistant_manager.prompts.PROMPT_FILE_PATHS",
-                {"claude": prompt_file},
-            ),
-        ):
-            manager.activate("test", "claude")
+        manager.activate("test", "claude")
 
-            # Check prompt was synced to file
-            assert prompt_file.exists()
-            assert prompt_file.read_text() == "My test content"
+        # Check prompt was synced to file
+        assert prompt_file.exists()
+        assert prompt_file.read_text() == "My test content"
 
-            # Check prompt is marked as enabled
-            loaded = manager.get("test")
-            assert loaded.enabled is True
-            assert loaded.app_type == "claude"
+        # Check prompt is marked as enabled
+        loaded = manager.get("test")
+        assert loaded.enabled is True
+        assert loaded.app_type == "claude"
 
     def test_activate_disables_other_prompts(self, temp_config_dir, temp_prompt_dir):
         """Test activating a prompt disables other prompts for same app."""
-        manager = PromptManager(temp_config_dir)
+        prompt_file = temp_prompt_dir / "CLAUDE.md"
+        manager = PromptManager(
+            temp_config_dir,
+            handler_overrides={"claude": {"user_path": prompt_file}},
+        )
         prompt1 = Prompt(
             id="test1",
             name="Test 1",
@@ -262,26 +259,15 @@ class TestPromptActivation:
         manager.create(prompt1)
         manager.create(prompt2)
 
-        prompt_file = temp_prompt_dir / "CLAUDE.md"
-        with (
-            patch.dict(
-                "code_assistant_manager.prompts.USER_PROMPT_FILE_PATHS",
-                {"claude": prompt_file},
-            ),
-            patch.dict(
-                "code_assistant_manager.prompts.PROMPT_FILE_PATHS",
-                {"claude": prompt_file},
-            ),
-        ):
-            manager.activate("test2", "claude")
+        manager.activate("test2", "claude")
 
-            # Check prompt1 is now disabled
-            loaded1 = manager.get("test1")
-            assert loaded1.enabled is False
+        # Check prompt1 is now disabled
+        loaded1 = manager.get("test1")
+        assert loaded1.enabled is False
 
-            # Check prompt2 is enabled
-            loaded2 = manager.get("test2")
-            assert loaded2.enabled is True
+        # Check prompt2 is enabled
+        loaded2 = manager.get("test2")
+        assert loaded2.enabled is True
 
     def test_activate_prompt_project_level(self, temp_config_dir, temp_prompt_dir):
         """Project-level activation writes to project CLAUDE.md without toggling enable state."""
@@ -315,23 +301,16 @@ class TestPromptActivation:
 
     def test_get_live_content(self, temp_config_dir, temp_prompt_dir):
         """Test getting live prompt content."""
-        manager = PromptManager(temp_config_dir)
-
         prompt_file = temp_prompt_dir / "CLAUDE.md"
         prompt_file.write_text("Live content here")
 
-        with (
-            patch.dict(
-                "code_assistant_manager.prompts.USER_PROMPT_FILE_PATHS",
-                {"claude": prompt_file},
-            ),
-            patch.dict(
-                "code_assistant_manager.prompts.PROMPT_FILE_PATHS",
-                {"claude": prompt_file},
-            ),
-        ):
-            content = manager.get_live_content("claude")
-            assert content == "Live content here"
+        manager = PromptManager(
+            temp_config_dir,
+            handler_overrides={"claude": {"user_path": prompt_file}},
+        )
+
+        content = manager.get_live_content("claude")
+        assert content == "Live content here"
 
     def test_get_live_content_project_level(self, temp_config_dir, temp_prompt_dir):
         """Test getting project-level live content."""
@@ -349,47 +328,33 @@ class TestPromptActivation:
 
     def test_get_live_content_missing_file(self, temp_config_dir, temp_prompt_dir):
         """Test getting live content when file doesn't exist."""
-        manager = PromptManager(temp_config_dir)
-
         prompt_file = temp_prompt_dir / "NONEXISTENT.md"
 
-        with (
-            patch.dict(
-                "code_assistant_manager.prompts.USER_PROMPT_FILE_PATHS",
-                {"claude": prompt_file},
-            ),
-            patch.dict(
-                "code_assistant_manager.prompts.PROMPT_FILE_PATHS",
-                {"claude": prompt_file},
-            ),
-        ):
-            content = manager.get_live_content("claude")
-            assert content is None
+        manager = PromptManager(
+            temp_config_dir,
+            handler_overrides={"claude": {"user_path": prompt_file}},
+        )
+
+        content = manager.get_live_content("claude")
+        assert content is None
 
     def test_import_from_live(self, temp_config_dir, temp_prompt_dir):
         """Test importing from live prompt file."""
-        manager = PromptManager(temp_config_dir)
-
         prompt_file = temp_prompt_dir / "CLAUDE.md"
         prompt_file.write_text("Imported content")
 
-        with (
-            patch.dict(
-                "code_assistant_manager.prompts.USER_PROMPT_FILE_PATHS",
-                {"claude": prompt_file},
-            ),
-            patch.dict(
-                "code_assistant_manager.prompts.PROMPT_FILE_PATHS",
-                {"claude": prompt_file},
-            ),
-        ):
-            prompt_id = manager.import_from_live("claude", "My Import")
+        manager = PromptManager(
+            temp_config_dir,
+            handler_overrides={"claude": {"user_path": prompt_file}},
+        )
 
-            assert prompt_id is not None
-            loaded = manager.get(prompt_id)
-            assert loaded.name == "My Import"
-            assert loaded.content == "Imported content"
-            assert loaded.app_type == "claude"
+        prompt_id = manager.import_from_live("claude", "My Import")
+
+        assert prompt_id is not None
+        loaded = manager.get(prompt_id)
+        assert loaded.name == "My Import"
+        assert loaded.content == "Imported content"
+        assert loaded.app_type == "claude"
 
     def test_import_from_live_project_level(self, temp_config_dir, temp_prompt_dir):
         """Test importing project-level prompt files."""
@@ -417,45 +382,31 @@ class TestPromptActivation:
         self, temp_config_dir, temp_prompt_dir
     ):
         """Importing same content should return existing prompt ID."""
-        manager = PromptManager(temp_config_dir)
-
         prompt_file = temp_prompt_dir / "CLAUDE.md"
         prompt_file.write_text("Deduplicated content")
 
-        with (
-            patch.dict(
-                "code_assistant_manager.prompts.USER_PROMPT_FILE_PATHS",
-                {"claude": prompt_file},
-            ),
-            patch.dict(
-                "code_assistant_manager.prompts.PROMPT_FILE_PATHS",
-                {"claude": prompt_file},
-            ),
-        ):
-            first_id = manager.import_from_live("claude", "First Import")
-            second_id = manager.import_from_live("claude", "Second Import")
+        manager = PromptManager(
+            temp_config_dir,
+            handler_overrides={"claude": {"user_path": prompt_file}},
+        )
+
+        first_id = manager.import_from_live("claude", "First Import")
+        second_id = manager.import_from_live("claude", "Second Import")
 
         assert first_id == second_id
 
     def test_import_from_live_empty(self, temp_config_dir, temp_prompt_dir):
         """Test importing from empty live file returns None."""
-        manager = PromptManager(temp_config_dir)
-
         prompt_file = temp_prompt_dir / "CLAUDE.md"
         prompt_file.write_text("")
 
-        with (
-            patch.dict(
-                "code_assistant_manager.prompts.USER_PROMPT_FILE_PATHS",
-                {"claude": prompt_file},
-            ),
-            patch.dict(
-                "code_assistant_manager.prompts.PROMPT_FILE_PATHS",
-                {"claude": prompt_file},
-            ),
-        ):
-            prompt_id = manager.import_from_live("claude")
-            assert prompt_id is None
+        manager = PromptManager(
+            temp_config_dir,
+            handler_overrides={"claude": {"user_path": prompt_file}},
+        )
+
+        prompt_id = manager.import_from_live("claude")
+        assert prompt_id is None
 
     def test_get_active_prompt(self, temp_config_dir):
         """Test getting active prompt for app type."""
@@ -486,7 +437,16 @@ class TestPromptActivation:
 
     def test_sync_all(self, temp_config_dir, temp_prompt_dir):
         """Test syncing all active prompts."""
-        manager = PromptManager(temp_config_dir)
+        prompt_file = temp_prompt_dir / "CLAUDE.md"
+
+        manager = PromptManager(
+            temp_config_dir,
+            handler_overrides={
+                "claude": {"user_path": prompt_file},
+                "codex": {"user_path": temp_prompt_dir / "AGENTS.md"},
+                "gemini": {"user_path": temp_prompt_dir / "GEMINI.md"},
+            },
+        )
         prompt = Prompt(
             id="test",
             name="Test",
@@ -496,32 +456,13 @@ class TestPromptActivation:
         )
         manager.create(prompt)
 
-        prompt_file = temp_prompt_dir / "CLAUDE.md"
-        with (
-            patch.dict(
-                "code_assistant_manager.prompts.USER_PROMPT_FILE_PATHS",
-                {
-                    "claude": prompt_file,
-                    "codex": temp_prompt_dir / "AGENTS.md",
-                    "gemini": temp_prompt_dir / "GEMINI.md",
-                },
-            ),
-            patch.dict(
-                "code_assistant_manager.prompts.PROMPT_FILE_PATHS",
-                {
-                    "claude": prompt_file,
-                    "codex": temp_prompt_dir / "AGENTS.md",
-                    "gemini": temp_prompt_dir / "GEMINI.md",
-                },
-            ),
-        ):
-            results = manager.sync_all()
+        results = manager.sync_all()
 
-            assert results["claude"] == "test"  # Returns prompt ID
-            assert results["codex"] is None  # No active prompt
-            assert results["gemini"] is None  # No active prompt
-            assert prompt_file.exists()
-            assert prompt_file.read_text() == "Sync content"
+        assert results["claude"] == "test"  # Returns prompt ID
+        assert results["codex"] is None  # No active prompt
+        assert results["gemini"] is None  # No active prompt
+        assert prompt_file.exists()
+        assert prompt_file.read_text() == "Sync content"
 
 
 class TestPromptConstants:

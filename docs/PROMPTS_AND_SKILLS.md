@@ -314,6 +314,149 @@ cam skill import --file ~/backups/skills-backup.json
 cam prompt sync
 ```
 
+## GitHub Copilot CLI Custom Instructions Support
+
+The prompt management system now integrates with [GitHub Copilot CLI custom instructions](https://docs.github.com/en/copilot/how-tos/configure-custom-instructions/add-repository-instructions?tool=copilotcli).
+
+This feature allows you to manage Copilot instructions as prompts and sync them to the appropriate repository configuration files.
+
+### About Copilot Instructions
+
+GitHub Copilot CLI supports repository-specific custom instructions that guide Copilot's behavior:
+
+- **Repository-wide instructions** (`.github/copilot-instructions.md`): Apply to all requests in the repository
+- **Path-specific instructions** (`.github/instructions/NAME.instructions.md`): Apply to specific file patterns with glob syntax
+
+For more details, see [GitHub Copilot custom instructions documentation](https://docs.github.com/en/copilot/concepts/prompting/response-customization).
+
+### Quick Start with Copilot Instructions
+
+```bash
+# Create a prompt for Copilot instructions
+cam prompt create copilot-guidelines --name "Copilot Guidelines" --file guidelines.md
+
+# Sync to repository-wide instructions
+cam prompt copilot-sync copilot-guidelines --type repo-wide
+
+# Sync to path-specific instructions
+cam prompt copilot-sync copilot-guidelines --type path-specific --apply-to "src/**/*.ts"
+
+# Show current Copilot instructions
+cam prompt copilot-show --type repo-wide
+
+# Import existing Copilot instructions as a prompt
+cam prompt copilot-import --name "Imported Copilot Guidelines"
+```
+
+### Managing Copilot Instructions
+
+#### Create and sync repository-wide instructions
+
+```bash
+# 1. Create a prompt
+cat > my-guidelines.md << 'EOF'
+# Code Guidelines
+- Write clear, maintainable code
+- Always test before committing
+- Follow the existing code style
+EOF
+
+cam prompt create my-copilot-guidelines --name "My Copilot Guidelines" --file my-guidelines.md
+
+# 2. Sync to .github/copilot-instructions.md
+cam prompt copilot-sync my-copilot-guidelines --type repo-wide
+
+# 3. Verify it was created
+cam prompt copilot-show --type repo-wide
+```
+
+#### Create and sync path-specific instructions
+
+Path-specific instructions use glob patterns to target specific files:
+
+```bash
+# 1. Create a prompt for TypeScript files
+cat > ts-guidelines.md << 'EOF'
+# TypeScript Guidelines
+- Use strict mode
+- Prefer interfaces over types
+- Always add type annotations
+EOF
+
+cam prompt create ts-copilot --name "TypeScript Copilot Guidelines" --file ts-guidelines.md
+
+# 2. Sync to path-specific instructions with glob pattern
+cam prompt copilot-sync ts-copilot \
+  --type path-specific \
+  --apply-to "src/**/*.ts,src/**/*.tsx"
+
+# 3. Optionally exclude certain agents
+cam prompt copilot-sync ts-copilot \
+  --type path-specific \
+  --apply-to "src/**/*.ts" \
+  --exclude-agent "code-review"
+```
+
+The file is created at `.github/instructions/ts-copilot.instructions.md` with frontmatter:
+
+```markdown
+---
+applyTo: "src/**/*.ts,src/**/*.tsx"
+---
+# TypeScript Guidelines
+...
+```
+
+#### Import existing Copilot instructions
+
+```bash
+# If you have .github/copilot-instructions.md in your repository
+# you can import it as a managed prompt:
+cam prompt copilot-import --name "Project Copilot Guidelines"
+
+# List to see the imported prompt
+cam prompt list
+```
+
+#### Exclude agents from instructions
+
+When syncing path-specific instructions, you can exclude specific agents:
+
+```bash
+# Only use for coding-agent, not code-review
+cam prompt copilot-sync my-prompt \
+  --type path-specific \
+  --apply-to "docs/**/*.md" \
+  --exclude-agent "code-review"
+```
+
+Valid values for `--exclude-agent`:
+- `coding-agent` - Exclude Copilot coding agent
+- `code-review` - Exclude Copilot code review
+
+### File Locations
+
+When you sync Copilot instructions, they're saved to:
+
+| Type | File Location |
+|------|---|
+| Repository-wide | `.github/copilot-instructions.md` |
+| Path-specific | `.github/instructions/{prompt-id}.instructions.md` |
+
+### Glob Pattern Examples
+
+Path-specific instructions support standard glob syntax:
+
+| Pattern | Matches |
+|---------|---------|
+| `**` or `**/*` | All files in all directories |
+| `*.py` | All `.py` files in the current directory |
+| `**/*.py` | All `.py` files recursively |
+| `src/**/*.py` | All `.py` files in `src/` recursively |
+| `**/*.ts,**/*.tsx` | TypeScript files (comma-separated patterns) |
+| `**/subdir/**/*.py` | `.py` files in any `subdir` at any depth |
+| `app/models/**/*.rb` | Ruby files in `app/models/` recursively |
+
 ## Configuration Directory
 
 All prompt and skill data is stored in:
