@@ -27,6 +27,9 @@ PROMPT_HANDLERS: Dict[str, Type[BasePromptHandler]] = {
 # Valid app types
 VALID_APP_TYPES = list(PROMPT_HANDLERS.keys())
 
+# Apps that support user-level prompts
+USER_LEVEL_APPS = ["claude", "codex", "gemini"]
+
 
 def generate_unique_id(prefix: str = "prompt") -> str:
     """Generate a unique ID with a short UUID suffix."""
@@ -204,23 +207,67 @@ class PromptManager:
             logger.error(f"Failed to export prompts: {e}")
             raise
 
+    # ==================== Default Prompt Operations ====================
+
+    def set_default(self, prompt_id: str) -> None:
+        """Set a prompt as the default prompt.
+
+        Only one prompt can be the default at a time.
+        """
+        prompts = self._load_prompts()
+        if prompt_id not in prompts:
+            raise ValueError(f"Prompt with id '{prompt_id}' not found")
+
+        # Clear default from all other prompts
+        for p in prompts.values():
+            p.is_default = False
+
+        # Set the specified prompt as default
+        prompts[prompt_id].is_default = True
+        prompts[prompt_id].updated_at = int(datetime.now().timestamp() * 1000)
+
+        self._save_prompts(prompts)
+        logger.info(f"Set default prompt: {prompt_id}")
+
+    def clear_default(self) -> None:
+        """Clear the default prompt setting."""
+        prompts = self._load_prompts()
+        for p in prompts.values():
+            if p.is_default:
+                p.is_default = False
+                p.updated_at = int(datetime.now().timestamp() * 1000)
+
+        self._save_prompts(prompts)
+        logger.info("Cleared default prompt")
+
+    def get_default(self) -> Optional[Prompt]:
+        """Get the default prompt."""
+        prompts = self._load_prompts()
+        for prompt in prompts.values():
+            if prompt.is_default:
+                return prompt
+        return None
+
     # ==================== Tool Sync Operations ====================
 
-    def activate(
+    def sync_to_app(
         self,
         prompt_id: str,
-        app_type: str = "claude",
+        app_type: str,
         level: str = "user",
         project_dir: Optional[Path] = None,
-    ) -> None:
+    ) -> Path:
         """
-        Activate a prompt by syncing it to the app's prompt file.
+        Sync a prompt to a specific app's prompt file.
 
         Args:
             prompt_id: The prompt identifier
             app_type: The app type (claude, codex, gemini, copilot)
             level: Target scope ("user" or "project")
             project_dir: Project directory when targeting project scope
+
+        Returns:
+            The path to the synced file
         """
         if level not in ("user", "project"):
             raise ValueError(f"Invalid level: {level}")
@@ -238,102 +285,87 @@ class PromptManager:
         if not target_file:
             raise ValueError(f"Tool '{app_type}' does not support level '{level}'")
 
-        # Backup existing prompt content from the live file first
-        self._backup_live_prompt(app_type, level, project_dir)
-
-        prompt.updated_at = int(datetime.now().timestamp() * 1000)
-
-        if level == "user":
-            # Disable all other prompts for this app type
-            for p in prompts.values():
-                if p.app_type == app_type or p.app_type is None:
-                    p.enabled = False
-
-            # Enable the selected prompt for user scope tracking
-            prompt.enabled = True
-            prompt.app_type = app_type
-        else:
-            # Ensure app type is recorded even if not tracking enabled state
-            if not prompt.app_type:
-                prompt.app_type = app_type
-
         # Sync to the target prompt file using the handler
         handler.sync_prompt(prompt.content, level, project_dir)
 
-        # Save changes (updates timestamps and activation state)
-        self._save_prompts(prompts)
         logger.info(
-            f"Activated prompt: {prompt_id} for {app_type} ({level} scope -> {target_file})"
+            f"Synced prompt: {prompt_id} to {app_type} ({level} -> {target_file})"
         )
+        return target_file
 
-    def deactivate(self, prompt_id: str) -> None:
-        """Deactivate a prompt."""
-        prompts = self._load_prompts()
-        if prompt_id not in prompts:
-            raise ValueError(f"Prompt with id '{prompt_id}' not found")
-
-        prompt = prompts[prompt_id]
-        prompt.enabled = False
-        prompt.updated_at = int(datetime.now().timestamp() * 1000)
-
-        self._save_prompts(prompts)
-        logger.info(f"Deactivated prompt: {prompt_id}")
-
-    def _backup_live_prompt(
+    def sync_to_apps(
         self,
-        app_type: str,
+        prompt_id: str,
+        app_types: List[str],
         level: str = "user",
         project_dir: Optional[Path] = None,
-    ) -> Optional[str]:
-        """Backup the current live prompt file content."""
-        handler = self.get_handler(app_type)
-        file_path = handler.get_prompt_file_path(level, project_dir)
+    ) -> Dict[str, Path]:
+        """
+        Sync a prompt to multiple apps.
 
-        if not file_path or not file_path.exists():
-            return None
+        Args:
+            prompt_id: The prompt identifier
+            app_types: List of app types to sync to
+            level: Target scope ("user" or "project")
+            project_dir: Project directory when targeting project scope
 
-        try:
-            content = file_path.read_text(encoding="utf-8")
-            if not content.strip():
-                return None
+        Returns:
+            Dict mapping app_type to synced file path
+        """
+        results = {}
+        for app_type in app_types:
+            try:
+                file_path = self.sync_to_app(prompt_id, app_type, level, project_dir)
+                results[app_type] = file_path
+            except Exception as e:
+                logger.error(f"Failed to sync to {app_type}: {e}")
+                raise
+        return results
 
-            # Check if this content already exists in our prompts
-            prompts = self._load_prompts()
-            for prompt in prompts.values():
-                if prompt.content.strip() == content.strip():
-                    return None
+    def sync_default_to_all(
+        self,
+        level: str = "user",
+        project_dir: Optional[Path] = None,
+    ) -> Dict[str, Optional[Path]]:
+        """
+        Sync the default prompt to all supported apps.
 
-            # Check if the currently enabled prompt matches the live content
-            for prompt in prompts.values():
-                if prompt.enabled and prompt.app_type == app_type:
-                    if prompt.content.strip() == content.strip():
-                        return None
-                    # Content differs - update the enabled prompt with live content
-                    prompt.content = content
-                    prompt.updated_at = int(datetime.now().timestamp() * 1000)
-                    self._save_prompts(prompts)
-                    logger.info(f"Backfilled live content to prompt: {prompt.id}")
-                    return prompt.id
+        Args:
+            level: Target scope ("user" or "project")
+            project_dir: Project directory when targeting project scope
 
-            # Create a backup prompt
-            scope_label = f"{level} " if level != "user" else ""
-            backup_id = generate_unique_id(f"backup-{app_type}-{level}")
-            backup_prompt = Prompt(
-                id=backup_id,
-                name=f"Backup from {scope_label}{app_type.capitalize()} ({datetime.now().strftime('%Y-%m-%d %H:%M')})".strip(),
-                content=content,
-                description=f"Auto-backup of {file_path.name}",
-                enabled=False,
-                app_type=app_type,
-            )
-            prompts[backup_id] = backup_prompt
-            self._save_prompts(prompts)
-            logger.info(f"Created backup prompt: {backup_id}")
-            return backup_id
+        Returns:
+            Dict mapping app_type to synced file path (None if skipped)
+        """
+        default_prompt = self.get_default()
+        if not default_prompt:
+            raise ValueError("No default prompt set. Use 'set-default' first.")
 
-        except Exception as e:
-            logger.warning(f"Failed to backup live prompt: {e}")
-            return None
+        results = {}
+
+        # Determine which apps to sync to based on level
+        if level == "user":
+            target_apps = USER_LEVEL_APPS
+        else:
+            target_apps = VALID_APP_TYPES
+
+        for app_type in target_apps:
+            handler = self.get_handler(app_type)
+            target_file = handler.get_prompt_file_path(level, project_dir)
+
+            if not target_file:
+                results[app_type] = None
+                continue
+
+            try:
+                handler.sync_prompt(default_prompt.content, level, project_dir)
+                results[app_type] = target_file
+                logger.info(f"Synced default prompt to {app_type} ({level})")
+            except Exception as e:
+                logger.error(f"Failed to sync to {app_type}: {e}")
+                results[app_type] = None
+
+        return results
 
     def get_live_content(
         self,
@@ -365,9 +397,7 @@ class PromptManager:
         prompts = self._load_prompts()
         stripped_content = content.strip()
         for prompt in prompts.values():
-            if prompt.content.strip() == stripped_content and (
-                prompt.app_type == app_type or prompt.app_type is None
-            ):
+            if prompt.content.strip() == stripped_content:
                 logger.info(
                     "Live prompt content already stored as prompt %s", prompt.id
                 )
@@ -384,8 +414,7 @@ class PromptManager:
             name=name,
             content=content,
             description=f"Imported from {file_path}",
-            enabled=False,
-            app_type=app_type,
+            is_default=False,
         )
 
         prompts[prompt_id] = prompt
@@ -393,47 +422,6 @@ class PromptManager:
 
         logger.info(f"Imported prompt: {prompt_id}")
         return prompt_id
-
-    def get_active_prompt(self, app_type: str) -> Optional[Prompt]:
-        """Get the currently active prompt for an app type."""
-        prompts = self._load_prompts()
-        for prompt in prompts.values():
-            if prompt.enabled and (
-                prompt.app_type == app_type or prompt.app_type is None
-            ):
-                return prompt
-        return None
-
-    def sync_all(self) -> Dict[str, Optional[str]]:
-        """Sync all active prompts to their respective app files."""
-        prompts = self._load_prompts()
-        results = {}
-
-        # Only sync to tools that support user-level prompts
-        for app_type, handler in self._handlers.items():
-            if not handler.user_prompt_path:
-                continue
-
-            # Find active prompt for this app type
-            active_prompt = None
-            for prompt in prompts.values():
-                if prompt.enabled and (
-                    prompt.app_type == app_type or prompt.app_type is None
-                ):
-                    active_prompt = prompt
-                    break
-
-            if active_prompt:
-                try:
-                    handler.sync_prompt(active_prompt.content, "user")
-                    results[app_type] = active_prompt.id
-                except Exception as e:
-                    logger.error(f"Failed to sync prompt to {app_type}: {e}")
-                    results[app_type] = None
-            else:
-                results[app_type] = None  # No active prompt
-
-        return results
 
     # ==================== Copilot-Specific Operations ====================
 
@@ -530,7 +518,7 @@ class PromptManager:
             name=name,
             content=content,
             description=f"Imported from {file_path}",
-            enabled=False,
+            is_default=False,
             instruction_type=instruction_type,
         )
 

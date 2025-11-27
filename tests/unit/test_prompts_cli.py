@@ -180,7 +180,6 @@ def test_sync_prompt_project_scope(cli_manager, tmp_path, monkeypatch):
         app_type="claude",
         level="project",
         project_dir=project_dir,
-        enable=False,
     )
 
     prompt_file = project_dir / "CLAUDE.md"
@@ -188,12 +187,11 @@ def test_sync_prompt_project_scope(cli_manager, tmp_path, monkeypatch):
     assert prompt_file.read_text() == "project-level content"
 
     stored = cli_manager.get("cli")
-    assert stored.enabled is False
     assert any("CLAUDE.md" in msg for msg in outputs)
 
 
-def test_sync_prompt_with_enable(cli_manager, tmp_path, monkeypatch):
-    """sync --enable marks the prompt as active and syncs it."""
+def test_sync_default_prompt(cli_manager, tmp_path, monkeypatch):
+    """sync without prompt_id syncs the default prompt."""
     from code_assistant_manager.prompts import PROMPT_HANDLERS
 
     # Setup user-level file path
@@ -210,6 +208,7 @@ def test_sync_prompt_with_enable(cli_manager, tmp_path, monkeypatch):
 
     prompt = Prompt(id="test", name="Test", content="test content")
     cli_manager.create(prompt)
+    cli_manager.set_default("test")
 
     outputs = []
     monkeypatch.setattr(
@@ -217,17 +216,15 @@ def test_sync_prompt_with_enable(cli_manager, tmp_path, monkeypatch):
     )
 
     prompts_commands.sync_prompts(
-        prompt_id="test",
+        prompt_id=None,
         app_type="claude",
         level="user",
         project_dir=None,
-        enable=True,
     )
 
     assert user_claude_file.exists()
     assert user_claude_file.read_text() == "test content"
 
     stored = cli_manager.get("test")
-    assert stored.enabled is True
-    assert stored.app_type == "claude"
-    assert any("enabled" in msg.lower() for msg in outputs)
+    assert stored.is_default is True
+    assert any("synced" in msg.lower() for msg in outputs)

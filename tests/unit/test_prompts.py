@@ -25,17 +25,7 @@ class TestPrompt:
         assert prompt.name == "Test Prompt"
         assert prompt.content == "Test content"
         assert prompt.description == "Test description"
-        assert prompt.enabled is False  # Default changed to False
-
-    def test_prompt_creation_with_app_type(self):
-        """Test creating a prompt with app_type."""
-        prompt = Prompt(
-            id="test",
-            name="Test Prompt",
-            content="Test content",
-            app_type="claude",
-        )
-        assert prompt.app_type == "claude"
+        assert prompt.is_default is False  # Default is False
 
     def test_prompt_to_dict(self):
         """Test converting prompt to dictionary."""
@@ -44,16 +34,14 @@ class TestPrompt:
             name="Test",
             content="Content",
             description="Description",
-            enabled=False,
-            app_type="claude",
+            is_default=False,
         )
         data = prompt.to_dict()
         assert data["id"] == "test"
         assert data["name"] == "Test"
         assert data["content"] == "Content"
         assert data["description"] == "Description"
-        assert data["enabled"] is False
-        assert data["appType"] == "claude"
+        assert data["isDefault"] is False
 
     def test_prompt_from_dict(self):
         """Test creating prompt from dictionary."""
@@ -62,16 +50,25 @@ class TestPrompt:
             "name": "Test",
             "content": "Content",
             "description": "Description",
-            "enabled": True,
-            "appType": "codex",
+            "isDefault": True,
         }
         prompt = Prompt.from_dict(data)
         assert prompt.id == "test"
         assert prompt.name == "Test"
         assert prompt.content == "Content"
         assert prompt.description == "Description"
-        assert prompt.enabled is True
-        assert prompt.app_type == "codex"
+        assert prompt.is_default is True
+
+    def test_prompt_from_dict_with_old_enabled_field(self):
+        """Test migration from old 'enabled' field to 'isDefault'."""
+        data = {
+            "id": "test",
+            "name": "Test",
+            "content": "Content",
+            "enabled": True,  # Old field
+        }
+        prompt = Prompt.from_dict(data)
+        assert prompt.is_default is True  # Should be migrated
 
     def test_prompt_timestamps(self):
         """Test prompt timestamps are set automatically."""
@@ -205,8 +202,8 @@ class TestPromptManager:
             manager.update(prompt)
 
 
-class TestPromptActivation:
-    """Test prompt activation and sync functionality."""
+class TestPromptDefaultAndSync:
+    """Test prompt default and sync functionality."""
 
     @pytest.fixture
     def temp_config_dir(self):
@@ -220,8 +217,61 @@ class TestPromptActivation:
         with tempfile.TemporaryDirectory() as tmpdir:
             yield Path(tmpdir)
 
-    def test_activate_prompt(self, temp_config_dir, temp_prompt_dir):
-        """Test activating a prompt syncs to file."""
+    def test_set_default_prompt(self, temp_config_dir):
+        """Test setting a prompt as default."""
+        manager = PromptManager(temp_config_dir)
+        prompt = Prompt(id="test", name="Test", content="My test content")
+        manager.create(prompt)
+
+        manager.set_default("test")
+
+        # Check prompt is marked as default
+        loaded = manager.get("test")
+        assert loaded.is_default is True
+
+    def test_set_default_clears_other_defaults(self, temp_config_dir):
+        """Test setting a prompt as default clears other defaults."""
+        manager = PromptManager(temp_config_dir)
+        prompt1 = Prompt(
+            id="test1", name="Test 1", content="Content 1", is_default=True
+        )
+        prompt2 = Prompt(id="test2", name="Test 2", content="Content 2")
+        manager.create(prompt1)
+        manager.create(prompt2)
+
+        manager.set_default("test2")
+
+        # Check prompt1 is no longer default
+        loaded1 = manager.get("test1")
+        assert loaded1.is_default is False
+
+        # Check prompt2 is now default
+        loaded2 = manager.get("test2")
+        assert loaded2.is_default is True
+
+    def test_get_default(self, temp_config_dir):
+        """Test getting the default prompt."""
+        manager = PromptManager(temp_config_dir)
+        prompt = Prompt(id="test", name="Test", content="Content", is_default=True)
+        manager.create(prompt)
+
+        default = manager.get_default()
+        assert default is not None
+        assert default.id == "test"
+
+    def test_clear_default(self, temp_config_dir):
+        """Test clearing the default prompt."""
+        manager = PromptManager(temp_config_dir)
+        prompt = Prompt(id="test", name="Test", content="Content", is_default=True)
+        manager.create(prompt)
+
+        manager.clear_default()
+
+        loaded = manager.get("test")
+        assert loaded.is_default is False
+
+    def test_sync_to_app(self, temp_config_dir, temp_prompt_dir):
+        """Test syncing a prompt to an app."""
         prompt_file = temp_prompt_dir / "CLAUDE.md"
         manager = PromptManager(
             temp_config_dir,
@@ -230,47 +280,14 @@ class TestPromptActivation:
         prompt = Prompt(id="test", name="Test", content="My test content")
         manager.create(prompt)
 
-        manager.activate("test", "claude")
+        manager.sync_to_app("test", "claude")
 
         # Check prompt was synced to file
         assert prompt_file.exists()
         assert prompt_file.read_text() == "My test content"
 
-        # Check prompt is marked as enabled
-        loaded = manager.get("test")
-        assert loaded.enabled is True
-        assert loaded.app_type == "claude"
-
-    def test_activate_disables_other_prompts(self, temp_config_dir, temp_prompt_dir):
-        """Test activating a prompt disables other prompts for same app."""
-        prompt_file = temp_prompt_dir / "CLAUDE.md"
-        manager = PromptManager(
-            temp_config_dir,
-            handler_overrides={"claude": {"user_path": prompt_file}},
-        )
-        prompt1 = Prompt(
-            id="test1",
-            name="Test 1",
-            content="Content 1",
-            enabled=True,
-            app_type="claude",
-        )
-        prompt2 = Prompt(id="test2", name="Test 2", content="Content 2")
-        manager.create(prompt1)
-        manager.create(prompt2)
-
-        manager.activate("test2", "claude")
-
-        # Check prompt1 is now disabled
-        loaded1 = manager.get("test1")
-        assert loaded1.enabled is False
-
-        # Check prompt2 is enabled
-        loaded2 = manager.get("test2")
-        assert loaded2.enabled is True
-
-    def test_activate_prompt_project_level(self, temp_config_dir, temp_prompt_dir):
-        """Project-level activation writes to project CLAUDE.md without toggling enable state."""
+    def test_sync_to_app_project_level(self, temp_config_dir, temp_prompt_dir):
+        """Project-level sync writes to project CLAUDE.md."""
         manager = PromptManager(temp_config_dir)
         prompt = Prompt(id="test", name="Proj", content="Project scoped content")
         manager.create(prompt)
@@ -278,26 +295,11 @@ class TestPromptActivation:
         project_dir = temp_prompt_dir / "project"
         project_dir.mkdir()
 
-        manager.activate("test", "claude", level="project", project_dir=project_dir)
+        manager.sync_to_app("test", "claude", level="project", project_dir=project_dir)
 
         prompt_file = project_dir / "CLAUDE.md"
         assert prompt_file.exists()
         assert prompt_file.read_text() == "Project scoped content"
-
-        loaded = manager.get("test")
-        assert loaded.enabled is False
-        assert loaded.app_type == "claude"
-
-    def test_deactivate_prompt(self, temp_config_dir):
-        """Test deactivating a prompt."""
-        manager = PromptManager(temp_config_dir)
-        prompt = Prompt(id="test", name="Test", content="Content", enabled=True)
-        manager.create(prompt)
-
-        manager.deactivate("test")
-
-        loaded = manager.get("test")
-        assert loaded.enabled is False
 
     def test_get_live_content(self, temp_config_dir, temp_prompt_dir):
         """Test getting live prompt content."""
@@ -354,7 +356,6 @@ class TestPromptActivation:
         loaded = manager.get(prompt_id)
         assert loaded.name == "My Import"
         assert loaded.content == "Imported content"
-        assert loaded.app_type == "claude"
 
     def test_import_from_live_project_level(self, temp_config_dir, temp_prompt_dir):
         """Test importing project-level prompt files."""
@@ -376,7 +377,6 @@ class TestPromptActivation:
         loaded = manager.get(prompt_id)
         assert loaded.name == "Project Prompt"
         assert loaded.content == "Project prompt content"
-        assert loaded.app_type == "claude"
 
     def test_import_from_live_returns_existing_prompt(
         self, temp_config_dir, temp_prompt_dir
@@ -408,41 +408,12 @@ class TestPromptActivation:
         prompt_id = manager.import_from_live("claude")
         assert prompt_id is None
 
-    def test_get_active_prompt(self, temp_config_dir):
-        """Test getting active prompt for app type."""
-        manager = PromptManager(temp_config_dir)
-        prompt1 = Prompt(id="test1", name="Test 1", content="Content 1", enabled=False)
-        prompt2 = Prompt(
-            id="test2",
-            name="Test 2",
-            content="Content 2",
-            enabled=True,
-            app_type="claude",
-        )
-        manager.create(prompt1)
-        manager.create(prompt2)
-
-        active = manager.get_active_prompt("claude")
-        assert active is not None
-        assert active.id == "test2"
-
-    def test_get_active_prompt_none(self, temp_config_dir):
-        """Test getting active prompt when none active."""
-        manager = PromptManager(temp_config_dir)
-        prompt = Prompt(id="test", name="Test", content="Content", enabled=False)
-        manager.create(prompt)
-
-        active = manager.get_active_prompt("claude")
-        assert active is None
-
-    def test_sync_all(self, temp_config_dir, temp_prompt_dir):
-        """Test syncing all active prompts."""
-        prompt_file = temp_prompt_dir / "CLAUDE.md"
-
+    def test_sync_default_to_all(self, temp_config_dir, temp_prompt_dir):
+        """Test syncing default prompt to all apps."""
         manager = PromptManager(
             temp_config_dir,
             handler_overrides={
-                "claude": {"user_path": prompt_file},
+                "claude": {"user_path": temp_prompt_dir / "CLAUDE.md"},
                 "codex": {"user_path": temp_prompt_dir / "AGENTS.md"},
                 "gemini": {"user_path": temp_prompt_dir / "GEMINI.md"},
             },
@@ -451,18 +422,17 @@ class TestPromptActivation:
             id="test",
             name="Test",
             content="Sync content",
-            enabled=True,
-            app_type="claude",
+            is_default=True,
         )
         manager.create(prompt)
 
-        results = manager.sync_all()
+        results = manager.sync_default_to_all()
 
-        assert results["claude"] == "test"  # Returns prompt ID
-        assert results["codex"] is None  # No active prompt
-        assert results["gemini"] is None  # No active prompt
-        assert prompt_file.exists()
-        assert prompt_file.read_text() == "Sync content"
+        assert results["claude"] is not None
+        assert results["codex"] is not None
+        assert results["gemini"] is not None
+        assert (temp_prompt_dir / "CLAUDE.md").exists()
+        assert (temp_prompt_dir / "CLAUDE.md").read_text() == "Sync content"
 
 
 class TestPromptConstants:

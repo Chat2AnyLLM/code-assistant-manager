@@ -13,8 +13,7 @@ class Prompt:
         name: str,
         content: str,
         description: Optional[str] = None,
-        enabled: bool = False,
-        app_type: Optional[str] = None,
+        is_default: bool = False,
         created_at: Optional[int] = None,
         updated_at: Optional[int] = None,
         instruction_type: Optional[str] = None,  # "repo-wide", "path-specific", or None
@@ -25,8 +24,7 @@ class Prompt:
         self.name = name
         self.content = content
         self.description = description
-        self.enabled = enabled
-        self.app_type = app_type  # claude, codex, gemini, copilot, or None for all
+        self.is_default = is_default  # Only one prompt can be default
         self.created_at = created_at or int(datetime.now().timestamp() * 1000)
         self.updated_at = updated_at or int(datetime.now().timestamp() * 1000)
         self.instruction_type = instruction_type  # Type of instructions (for Copilot)
@@ -39,14 +37,12 @@ class Prompt:
             "id": self.id,
             "name": self.name,
             "content": self.content,
-            "enabled": self.enabled,
+            "isDefault": self.is_default,
             "createdAt": self.created_at,
             "updatedAt": self.updated_at,
         }
         if self.description:
             data["description"] = self.description
-        if self.app_type:
-            data["appType"] = self.app_type
         if self.instruction_type:
             data["instructionType"] = self.instruction_type
         if self.apply_to:
@@ -58,13 +54,14 @@ class Prompt:
     @classmethod
     def from_dict(cls, data: Dict) -> "Prompt":
         """Create from dictionary."""
+        # Support both old 'enabled' and new 'isDefault' fields for migration
+        is_default = data.get("isDefault", data.get("enabled", False))
         return cls(
             id=data["id"],
             name=data["name"],
             content=data["content"],
             description=data.get("description"),
-            enabled=data.get("enabled", False),
-            app_type=data.get("appType"),
+            is_default=is_default,
             created_at=data.get("createdAt"),
             updated_at=data.get("updatedAt"),
             instruction_type=data.get("instructionType"),
