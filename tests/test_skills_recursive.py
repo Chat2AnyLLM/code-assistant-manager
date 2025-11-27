@@ -53,6 +53,7 @@ class TestRecursiveSkillDiscovery:
             # Verify results
             assert len(skills) == 2
 
+            # directory is now just the skill folder name for installation
             skill_map = {s.directory: s for s in skills}
 
             # Check Skill 1
@@ -60,14 +61,16 @@ class TestRecursiveSkillDiscovery:
             s1 = skill_map["skill1"]
             assert s1.name == "Skill One"
             assert s1.key == "owner/repo:skill1"
+            assert s1.source_directory == "skill1"
             assert s1.readme_url.endswith("/skills/skill1")
 
             # Check Skill 2
-            # directory should use forward slashes
-            assert "category/skill2" in skill_map
-            s2 = skill_map["category/skill2"]
+            # directory is just the folder name, source_directory has full path
+            assert "skill2" in skill_map
+            s2 = skill_map["skill2"]
             assert s2.name == "Skill Two"
             assert s2.key == "owner/repo:category/skill2"
+            assert s2.source_directory == "category/skill2"
             assert s2.readme_url.endswith("/skills/category/skill2")
 
     @patch("code_assistant_manager.skills.SkillManager._download_repo")
@@ -95,5 +98,8 @@ class TestRecursiveSkillDiscovery:
 
             # Should find nested skill but skip root skill
             assert len(skills) == 1
-            assert skills[0].directory == "nested/skill"
+            # directory is now just the folder name for installation
+            assert skills[0].directory == "skill"
+            # source_directory has the full path
+            assert skills[0].source_directory == "nested/skill"
             assert skills[0].name == "Nested"

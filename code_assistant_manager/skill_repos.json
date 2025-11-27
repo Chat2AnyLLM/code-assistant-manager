@@ -30,6 +30,7 @@
     "owner": "jeremylongshore",
     "name": "claude-code-plugins-plus",
     "branch": "main",
-    "enabled": true
+    "enabled": true,
+    "skillsPath": "plugins"
   }
 }

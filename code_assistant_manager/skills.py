@@ -94,6 +94,7 @@ class Skill:
         repo_branch: Optional[str] = None,
         skills_path: Optional[str] = None,
         readme_url: Optional[str] = None,
+        source_directory: Optional[str] = None,
     ):
         self.key = key
         self.name = name
@@ -105,6 +106,8 @@ class Skill:
         self.repo_branch = repo_branch or "main"
         self.skills_path = skills_path
         self.readme_url = readme_url
+        # source_directory stores full path in repo; directory is just the skill folder name for installation
+        self.source_directory = source_directory
 
     def to_dict(self) -> Dict:
         """Convert to dictionary."""
@@ -125,6 +128,8 @@ class Skill:
             data["skillsPath"] = self.skills_path
         if self.readme_url:
             data["readmeUrl"] = self.readme_url
+        if self.source_directory:
+            data["sourceDirectory"] = self.source_directory
         return data
 
     @classmethod
@@ -141,6 +146,7 @@ class Skill:
             repo_branch=data.get("repoBranch"),
             skills_path=data.get("skillsPath"),
             readme_url=data.get("readmeUrl"),
+            source_directory=data.get("sourceDirectory"),
         )
 
 
@@ -395,17 +401,19 @@ class SkillManager:
 
         try:
             # Determine the source path within the downloaded repo
+            # Use source_directory if available (full path in repo), otherwise fall back to directory
+            source_dir = skill.source_directory or skill.directory
             if skill.skills_path:
-                source_path = temp_dir / skill.skills_path.strip("/") / skill.directory
+                source_path = temp_dir / skill.skills_path.strip("/") / source_dir
             else:
-                source_path = temp_dir / skill.directory
+                source_path = temp_dir / source_dir
 
             if not source_path.exists():
                 raise ValueError(
                     f"Skill directory not found in repository: {source_path}"
                 )
 
-            # Copy to install directory
+            # Copy to install directory using just the skill folder name (directory field)
             dest_path = install_dir / skill.directory
             if dest_path.exists():
                 shutil.rmtree(dest_path)
@@ -643,14 +651,17 @@ class SkillManager:
                 meta = self._parse_skill_metadata(skill_md)
 
                 try:
-                    # Calculate relative path from scan_dir
+                    # Calculate relative path from scan_dir (full path in repo relative to skills_path)
                     rel_path = skill_dir.relative_to(scan_dir)
-                    directory = str(rel_path).replace("\\", "/")
+                    source_directory = str(rel_path).replace("\\", "/")
 
                     # Skip if SKILL.md is at the root of scan_dir (directory == ".")
                     # to avoid conflicts when installing to the root of skills directory
-                    if directory == ".":
+                    if source_directory == ".":
                         continue
+
+                    # The install directory is just the skill folder name (last part of path)
+                    directory = skill_dir.name
                 except ValueError:
                     continue
 
@@ -659,8 +670,8 @@ class SkillManager:
                 readme_path = str(path_from_repo_root).replace("\\", "/")
 
                 skill = Skill(
-                    key=f"{repo.owner}/{repo.name}:{directory}",
-                    name=meta.get("name", directory.split("/")[-1]),
+                    key=f"{repo.owner}/{repo.name}:{source_directory}",
+                    name=meta.get("name", directory),
                     description=meta.get("description", ""),
                     directory=directory,
                     installed=False,
@@ -669,6 +680,7 @@ class SkillManager:
                     repo_branch=actual_branch,
                     skills_path=repo.skills_path,
                     readme_url=f"https://github.com/{repo.owner}/{repo.name}/tree/{actual_branch}/{readme_path}",
+                    source_directory=source_directory,
                 )
                 skills.append(skill)
                 logger.debug(f"Found skill: {skill.key}")

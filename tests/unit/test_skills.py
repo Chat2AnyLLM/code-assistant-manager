@@ -321,8 +321,10 @@ class TestSkillManager:
             "code_assistant_manager.skills.SKILL_INSTALL_DIRS",
             {"test_app": temp_install_dir},
         ):
-            # Create skill1 directory in install location
-            (temp_install_dir / "skill1").mkdir(parents=True)
+            # Create skill1 directory in install location with SKILL.md
+            skill1_dir = temp_install_dir / "skill1"
+            skill1_dir.mkdir(parents=True)
+            (skill1_dir / "SKILL.md").write_text("---\nname: Skill 1\n---\n# Skill 1")
 
             manager.sync_installed_status("test_app")
 
