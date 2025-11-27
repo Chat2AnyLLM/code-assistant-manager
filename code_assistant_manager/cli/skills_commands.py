@@ -22,12 +22,12 @@ from code_assistant_manager.skills import (
 logger = logging.getLogger(__name__)
 
 skill_app = typer.Typer(
-    help="Manage skills for AI assistants (Claude, Codex, Gemini)",
+    help="Manage skills for AI assistants (Claude, Codex, Gemini, Droid)",
     no_args_is_help=True,
 )
 
 # Valid app types
-VALID_APP_TYPES = ["claude", "codex", "gemini"]
+VALID_APP_TYPES = ["claude", "codex", "gemini", "droid"]
 
 
 def _get_skill_manager() -> SkillManager:

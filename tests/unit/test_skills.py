@@ -9,11 +9,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from code_assistant_manager.skills import (
+    DEFAULT_SKILL_REPOS,
+    SKILL_INSTALL_DIRS,
     Skill,
     SkillManager,
     SkillRepo,
-    SKILL_INSTALL_DIRS,
-    DEFAULT_SKILL_REPOS,
 )
 
 
@@ -210,18 +210,18 @@ class TestSkillManager:
         manager = SkillManager(temp_config_dir)
         skill = Skill(key="test", name="Test", description="Desc", directory="/path")
         manager.create(skill)
-        
+
         manager.delete("test")
         assert manager.get("test") is None
 
     def test_manager_add_remove_repo(self, temp_config_dir):
         """Test adding and removing skill repos."""
         manager = SkillManager(temp_config_dir)
-        
+
         # Get initial count (includes default repos)
         initial_repos = manager.get_repos()
         initial_count = len(initial_repos)
-        
+
         repo = SkillRepo(owner="testowner", name="testrepo", branch="main")
         manager.add_repo(repo)
 
@@ -292,11 +292,11 @@ class TestSkillManager:
     def test_manager_init_default_repos(self, temp_config_dir):
         """Test initializing default repos."""
         manager = SkillManager(temp_config_dir)
-        
+
         # Repos are auto-initialized now, so should already have defaults
         repos = manager.get_repos()
         assert len(repos) == len(DEFAULT_SKILL_REPOS)
-        
+
         # Calling init_default_repos again should be idempotent
         manager.init_default_repos()
         repos = manager.get_repos()
@@ -305,20 +305,27 @@ class TestSkillManager:
     def test_manager_sync_installed_status(self, temp_config_dir, temp_install_dir):
         """Test syncing installed status."""
         manager = SkillManager(temp_config_dir)
-        
+
         # Create skills
-        skill1 = Skill(key="test1", name="Test 1", description="Desc", directory="skill1")
-        skill2 = Skill(key="test2", name="Test 2", description="Desc", directory="skill2")
+        skill1 = Skill(
+            key="test1", name="Test 1", description="Desc", directory="skill1"
+        )
+        skill2 = Skill(
+            key="test2", name="Test 2", description="Desc", directory="skill2"
+        )
         manager.create(skill1)
         manager.create(skill2)
-        
+
         # Mock the install directory
-        with patch.dict('code_assistant_manager.skills.SKILL_INSTALL_DIRS', {'test_app': temp_install_dir}):
+        with patch.dict(
+            "code_assistant_manager.skills.SKILL_INSTALL_DIRS",
+            {"test_app": temp_install_dir},
+        ):
             # Create skill1 directory in install location
             (temp_install_dir / "skill1").mkdir(parents=True)
-            
+
             manager.sync_installed_status("test_app")
-            
+
             skills = manager.get_all()
             assert skills["test1"].installed is True
             assert skills["test2"].installed is False
@@ -326,17 +333,20 @@ class TestSkillManager:
     def test_manager_get_installed_skills(self, temp_config_dir, temp_install_dir):
         """Test getting installed skills."""
         manager = SkillManager(temp_config_dir)
-        
+
         # Create a skill and a skill directory
         skill = Skill(key="test", name="Test", description="Desc", directory="my-skill")
         manager.create(skill)
-        
-        with patch.dict('code_assistant_manager.skills.SKILL_INSTALL_DIRS', {'test_app': temp_install_dir}):
+
+        with patch.dict(
+            "code_assistant_manager.skills.SKILL_INSTALL_DIRS",
+            {"test_app": temp_install_dir},
+        ):
             # Create skill directory with SKILL.md
             skill_dir = temp_install_dir / "my-skill"
             skill_dir.mkdir(parents=True)
             (skill_dir / "SKILL.md").write_text("---\nname: My Skill\n---\n# My Skill")
-            
+
             installed = manager.get_installed_skills("test_app")
             assert len(installed) == 1
             assert installed[0].name == "Test"
@@ -345,9 +355,10 @@ class TestSkillManager:
     def test_parse_skill_metadata(self, temp_config_dir):
         """Test parsing SKILL.md metadata."""
         manager = SkillManager(temp_config_dir)
-        
+
         skill_md = temp_config_dir / "SKILL.md"
-        skill_md.write_text("""---
+        skill_md.write_text(
+            """---
 name: Test Skill
 description: A test skill description
 ---
@@ -355,8 +366,9 @@ description: A test skill description
 # Test Skill
 
 This is the skill content.
-""")
-        
+"""
+        )
+
         meta = manager._parse_skill_metadata(skill_md)
         assert meta.get("name") == "Test Skill"
         assert meta.get("description") == "A test skill description"
@@ -364,20 +376,20 @@ This is the skill content.
     def test_parse_skill_metadata_no_frontmatter(self, temp_config_dir):
         """Test parsing SKILL.md without frontmatter."""
         manager = SkillManager(temp_config_dir)
-        
+
         skill_md = temp_config_dir / "SKILL.md"
         skill_md.write_text("# Just Content\n\nNo frontmatter here.")
-        
+
         meta = manager._parse_skill_metadata(skill_md)
         assert meta == {}
 
     def test_parse_skill_metadata_invalid_yaml(self, temp_config_dir):
         """Test parsing SKILL.md with invalid YAML."""
         manager = SkillManager(temp_config_dir)
-        
+
         skill_md = temp_config_dir / "SKILL.md"
         skill_md.write_text("---\ninvalid: yaml: content:\n---\n# Content")
-        
+
         meta = manager._parse_skill_metadata(skill_md)
         assert meta == {}
 
@@ -401,19 +413,21 @@ class TestSkillInstallation:
     def mock_skill_repo(self, temp_config_dir):
         """Create a mock skill repository structure."""
         repo_dir = temp_config_dir / "mock_repo"
-        
+
         # Create skill structure
         skill_dir = repo_dir / "my-skill"
         skill_dir.mkdir(parents=True)
-        (skill_dir / "SKILL.md").write_text("""---
+        (skill_dir / "SKILL.md").write_text(
+            """---
 name: My Skill
 description: A test skill
 ---
 # My Skill
 Content here.
-""")
+"""
+        )
         (skill_dir / "config.json").write_text('{"key": "value"}')
-        
+
         return repo_dir
 
     def test_install_skill_no_repo_info(self, temp_config_dir, temp_install_dir):
@@ -421,8 +435,11 @@ Content here.
         manager = SkillManager(temp_config_dir)
         skill = Skill(key="test", name="Test", description="Desc", directory="my-skill")
         manager.create(skill)
-        
-        with patch.dict('code_assistant_manager.skills.SKILL_INSTALL_DIRS', {'claude': temp_install_dir}):
+
+        with patch.dict(
+            "code_assistant_manager.skills.SKILL_INSTALL_DIRS",
+            {"claude": temp_install_dir},
+        ):
             with pytest.raises(ValueError, match="no repository information"):
                 manager.install("test", "claude")
 
@@ -439,18 +456,21 @@ Content here.
             repo_name="repo",
         )
         manager.create(skill)
-        
+
         # Create the skill directory
         skill_dir = temp_install_dir / "my-skill"
         skill_dir.mkdir(parents=True)
         (skill_dir / "SKILL.md").write_text("# Skill")
-        
-        with patch.dict('code_assistant_manager.skills.SKILL_INSTALL_DIRS', {'claude': temp_install_dir}):
+
+        with patch.dict(
+            "code_assistant_manager.skills.SKILL_INSTALL_DIRS",
+            {"claude": temp_install_dir},
+        ):
             manager.uninstall("test", "claude")
-            
+
             # Check skill directory was removed
             assert not skill_dir.exists()
-            
+
             # Check skill is marked as uninstalled
             loaded = manager.get("test")
             assert loaded.installed is False
@@ -468,11 +488,14 @@ Content here.
             repo_name="repo",
         )
         manager.create(skill)
-        
-        with patch.dict('code_assistant_manager.skills.SKILL_INSTALL_DIRS', {'claude': temp_install_dir}):
+
+        with patch.dict(
+            "code_assistant_manager.skills.SKILL_INSTALL_DIRS",
+            {"claude": temp_install_dir},
+        ):
             # Should not raise even if directory doesn't exist
             manager.uninstall("test", "claude")
-            
+
             loaded = manager.get("test")
             assert loaded.installed is False
 
@@ -485,6 +508,7 @@ class TestSkillConstants:
         assert "claude" in SKILL_INSTALL_DIRS
         assert "codex" in SKILL_INSTALL_DIRS
         assert "gemini" in SKILL_INSTALL_DIRS
+        assert "droid" in SKILL_INSTALL_DIRS
 
     def test_default_skill_repos(self):
         """Test DEFAULT_SKILL_REPOS has expected structure."""

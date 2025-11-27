@@ -29,7 +29,7 @@ def _load_builtin_skill_repos() -> List[Dict]:
     # Look for skill_repos.json in the package directory
     package_dir = Path(__file__).parent
     repos_file = package_dir / "skill_repos.json"
-    
+
     if repos_file.exists():
         try:
             with open(repos_file, "r", encoding="utf-8") as f:
@@ -47,7 +47,7 @@ def _load_builtin_skill_repos() -> List[Dict]:
                 ]
         except Exception as e:
             logger.warning(f"Failed to load builtin skill repos: {e}")
-    
+
     # Fallback defaults if file not found
     return [
         {
@@ -75,6 +75,7 @@ SKILL_INSTALL_DIRS = {
     "claude": Path.home() / ".claude" / "skills",
     "codex": Path.home() / ".codex" / "skills",
     "gemini": Path.home() / ".gemini" / "skills",
+    "droid": Path.home() / ".factory" / "skills",
 }
 
 
@@ -388,7 +389,9 @@ class SkillManager:
         branch = skill.repo_branch or "main"
 
         # Try downloading the repo
-        temp_dir, actual_branch = self._download_repo(skill.repo_owner, skill.repo_name, branch)
+        temp_dir, actual_branch = self._download_repo(
+            skill.repo_owner, skill.repo_name, branch
+        )
 
         try:
             # Determine the source path within the downloaded repo
@@ -614,7 +617,9 @@ class SkillManager:
         Returns:
             List of skills found in the repository
         """
-        temp_dir, actual_branch = self._download_repo(repo.owner, repo.name, repo.branch)
+        temp_dir, actual_branch = self._download_repo(
+            repo.owner, repo.name, repo.branch
+        )
         skills = []
 
         try:
