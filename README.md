@@ -60,12 +60,32 @@ CAM offers a rich set of subcommands for advanced management.
 
 ### Main Commands
 
-| Command | Description |
-| :--- | :--- |
-| `cam launch` | Open the interactive menu or launch specific tools directly (e.g., `cam launch claude`). |
-| `cam doctor` | specific Run diagnostic checks on your environment, API keys, and configuration. |
-| `cam version` | Display the current version of CAM. |
-| `cam upgrade` | Update underlying tools (like `claude-engineer`, `aider`, etc.) to their latest versions. |
+| Command | Alias | Description |
+| :--- | :--- | :--- |
+| `cam launch` | `l` | Open the interactive menu or launch specific tools directly (e.g., `cam l claude`). |
+| `cam doctor` | `d` | Run diagnostic checks on your environment, API keys, and configuration. |
+| `cam version` | `v` | Display the current version of CAM. |
+| `cam upgrade` | `u` | Update underlying tools (like `claude-engineer`, `aider`, etc.) to their latest versions. |
+| `cam install` | `i` | Alias for `upgrade`. Installs or updates tools. |
+| `cam uninstall` | `un` | Uninstall CLI tools and optionally backup/remove their configuration files. |
+| `cam config` | `cf` | Manage configuration files. Use `cam config list` to see all config paths. |
+| `cam completion` | `c` | Generate shell completion scripts for Bash or Zsh. |
+
+### Shell Completion
+
+Enable tab completion for `cam` commands in your shell.
+
+**Bash:**
+```bash
+# Add to ~/.bashrc
+source <(cam completion bash)
+```
+
+**Zsh:**
+```zsh
+# Add to ~/.zshrc
+source <(cam completion zsh)
+```
 
 ### Prompt Management (`cam prompt`)
 
