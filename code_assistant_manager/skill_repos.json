@@ -25,5 +25,11 @@
     "branch": "main",
     "enabled": true,
     "skillsPath": ".claude/skills"
+  },
+  "jeremylongshore/claude-code-plugins-plus": {
+    "owner": "jeremylongshore",
+    "name": "claude-code-plugins-plus",
+    "branch": "main",
+    "enabled": true
   }
 }
