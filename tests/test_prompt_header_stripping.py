@@ -40,7 +40,9 @@ You are an expert.
         assert "Content:" not in synced_content
 
         # Verify content starts with the markdown header
-        assert synced_content.startswith("# Gemini Code Assistant Instructions")
+        assert synced_content.startswith(
+            "# GEMINI.md — Gemini Code Assistant Instructions"
+        )
         assert "## Role" in synced_content
 
     def test_normalize_header_after_stripping(self, temp_dir):
@@ -63,8 +65,10 @@ Some content.
         # Verify header is stripped
         assert "Prompt: Some Prompt" not in synced_content
 
-        # Verify header is renamed to Claude
-        assert synced_content.startswith("# Claude Code Assistant Instructions")
+        # Verify header is renamed to Claude and uses standard format
+        assert synced_content.startswith(
+            "# CLAUDE.md — Claude Code Assistant Instructions"
+        )
 
     def test_no_header_strip_if_no_content_delimiter(self, temp_dir):
         handler = GeminiPromptHandler(user_path_override=temp_dir / "GEMINI.md")

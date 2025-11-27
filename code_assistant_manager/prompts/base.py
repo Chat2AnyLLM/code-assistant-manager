@@ -142,7 +142,7 @@ class BasePromptHandler(ABC):
 
         return content
 
-    def _normalize_header(self, content: str) -> str:
+    def _normalize_header(self, content: str, filename: Optional[str] = None) -> str:
         """
         Normalize the first line header to match this tool's name.
 
@@ -151,6 +151,7 @@ class BasePromptHandler(ABC):
 
         Args:
             content: The prompt content
+            filename: The filename of the prompt file (e.g. GEMINI.md)
 
         Returns:
             Content with normalized header
@@ -173,8 +174,14 @@ class BasePromptHandler(ABC):
             if self.tool_name == "copilot":
                 tool_display_name = "GitHub Copilot"
 
-            suffix = match.group(2) or ""
-            new_header = f"# {tool_display_name}{suffix}"
+            if filename:
+                new_header = (
+                    f"# {filename} — {tool_display_name} Code Assistant Instructions"
+                )
+            else:
+                suffix = match.group(2) or ""
+                new_header = f"# {tool_display_name}{suffix}"
+
             if len(lines) > 1:
                 return new_header + "\n" + lines[1]
             return new_header
@@ -211,7 +218,7 @@ class BasePromptHandler(ABC):
         content = self._strip_metadata_header(content)
 
         # Normalize header to match this tool's name
-        content = self._normalize_header(content)
+        content = self._normalize_header(content, filename=file_path.name)
 
         # Ensure parent directory exists
         file_path.parent.mkdir(parents=True, exist_ok=True)
