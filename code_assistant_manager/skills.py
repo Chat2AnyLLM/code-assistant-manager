@@ -633,34 +633,40 @@ class SkillManager:
                 logger.warning(f"Skills path not found: {scan_dir}")
                 return skills
 
-            # Scan for skill directories (those containing SKILL.md)
-            for item in scan_dir.iterdir():
-                if not item.is_dir():
-                    continue
-
-                skill_md = item / "SKILL.md"
-                if not skill_md.exists():
+            # Scan for SKILL.md files recursively
+            for skill_md in scan_dir.rglob("SKILL.md"):
+                skill_dir = skill_md.parent
+                if not skill_dir.is_dir():
                     continue
 
                 # Parse skill metadata from SKILL.md
                 meta = self._parse_skill_metadata(skill_md)
-                directory = item.name
+
+                try:
+                    # Calculate relative path from scan_dir
+                    rel_path = skill_dir.relative_to(scan_dir)
+                    directory = str(rel_path).replace("\\", "/")
+
+                    # Skip if SKILL.md is at the root of scan_dir (directory == ".")
+                    # to avoid conflicts when installing to the root of skills directory
+                    if directory == ".":
+                        continue
+                except ValueError:
+                    continue
 
                 # Build README URL using actual branch
-                if repo.skills_path:
-                    readme_path = f"{repo.skills_path.strip('/')}/{directory}"
-                else:
-                    readme_path = directory
+                path_from_repo_root = skill_dir.relative_to(temp_dir)
+                readme_path = str(path_from_repo_root).replace("\\", "/")
 
                 skill = Skill(
                     key=f"{repo.owner}/{repo.name}:{directory}",
-                    name=meta.get("name", directory),
+                    name=meta.get("name", directory.split("/")[-1]),
                     description=meta.get("description", ""),
                     directory=directory,
                     installed=False,
                     repo_owner=repo.owner,
                     repo_name=repo.name,
-                    repo_branch=actual_branch,  # Use actual branch, not configured branch
+                    repo_branch=actual_branch,
                     skills_path=repo.skills_path,
                     readme_url=f"https://github.com/{repo.owner}/{repo.name}/tree/{actual_branch}/{readme_path}",
                 )
@@ -723,12 +729,17 @@ class SkillManager:
         installed_skills = []
         existing_skills = self._load_skills()
 
-        for item in install_dir.iterdir():
-            if not item.is_dir():
+        # Scan recursively for SKILL.md
+        for skill_md in install_dir.rglob("SKILL.md"):
+            skill_dir = skill_md.parent
+            if not skill_dir.is_dir():
                 continue
 
-            directory = item.name
-            skill_md = item / "SKILL.md"
+            try:
+                rel_path = skill_dir.relative_to(install_dir)
+                directory = str(rel_path).replace("\\", "/")
+            except ValueError:
+                continue
 
             # Check if we have this skill in our database
             matching_skill = None
@@ -740,12 +751,12 @@ class SkillManager:
             if matching_skill:
                 matching_skill.installed = True
                 installed_skills.append(matching_skill)
-            elif skill_md.exists():
+            else:
                 # Local skill not in our database
                 meta = self._parse_skill_metadata(skill_md)
                 skill = Skill(
                     key=f"local:{directory}",
-                    name=meta.get("name", directory),
+                    name=meta.get("name", directory.split("/")[-1]),
                     description=meta.get("description", ""),
                     directory=directory,
                     installed=True,
@@ -767,9 +778,14 @@ class SkillManager:
 
         installed_dirs = set()
         if install_dir.exists():
-            installed_dirs = {
-                item.name.lower() for item in install_dir.iterdir() if item.is_dir()
-            }
+            # Scan recursively for SKILL.md
+            for skill_md in install_dir.rglob("SKILL.md"):
+                try:
+                    skill_dir = skill_md.parent
+                    rel_path = skill_dir.relative_to(install_dir)
+                    installed_dirs.add(str(rel_path).replace("\\", "/").lower())
+                except ValueError:
+                    continue
 
         skills = self._load_skills()
         for skill in skills.values():
