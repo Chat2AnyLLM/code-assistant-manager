@@ -89,6 +89,59 @@ class BasePromptHandler(ABC):
             return project_dir / filename
         return None
 
+    def _strip_metadata_header(self, content: str) -> str:
+        """
+        Strip internal metadata header if present.
+
+        The metadata header typically looks like:
+        Prompt: ...
+        Description: ...
+        Status: ...
+        ID: ...
+
+        Content:
+
+        Args:
+            content: The prompt content
+
+        Returns:
+            Content with metadata header removed
+        """
+        lines = content.splitlines()
+
+        # Find the "Content:" line
+        content_line_idx = -1
+        for i, line in enumerate(lines[:30]):  # Check first 30 lines
+            if line.strip() == "Content:":
+                content_line_idx = i
+                break
+
+        if content_line_idx != -1:
+            # Check if preceding lines look like metadata
+            # At least one line should start with known metadata keys
+            header_slice = lines[:content_line_idx]
+            has_metadata = False
+            for line in header_slice:
+                if line.startswith(
+                    ("Prompt:", "ID:", "Description:", "Status:", "Imported from")
+                ):
+                    has_metadata = True
+                    break
+
+            if has_metadata:
+                # Return content starting after "Content:" line
+                # Skip "Content:" line
+                start_idx = content_line_idx + 1
+
+                # Skip subsequent empty lines
+                while start_idx < len(lines) and not lines[start_idx].strip():
+                    start_idx += 1
+
+                if start_idx < len(lines):
+                    return "\n".join(lines[start_idx:])
+
+        return content
+
     def _normalize_header(self, content: str) -> str:
         """
         Normalize the first line header to match this tool's name.
@@ -153,6 +206,9 @@ class BasePromptHandler(ABC):
             raise ValueError(
                 f"Tool '{self.tool_name}' does not support level '{level}'"
             )
+
+        # Strip metadata header if present
+        content = self._strip_metadata_header(content)
 
         # Normalize header to match this tool's name
         content = self._normalize_header(content)
