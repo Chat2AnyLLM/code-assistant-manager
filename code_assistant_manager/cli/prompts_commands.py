@@ -221,6 +221,68 @@ def delete_prompt(
         raise typer.Exit(1)
 
 
+@prompt_app.command("enable")
+def enable_prompt(
+    prompt_id: str = typer.Argument(..., help="Prompt identifier to enable"),
+    app_type: str = typer.Option(
+        ...,
+        "--app",
+        "-a",
+        help="App type to enable prompt for (claude, codex, gemini, copilot)",
+    ),
+):
+    """Enable a prompt for a specific app.
+
+    This marks the prompt as active for the specified app type.
+    Only one prompt can be active per app type at a time.
+    Use 'sync' command to write the content to the app's prompt file.
+    """
+    manager = _get_prompt_manager()
+    prompt = manager.get(prompt_id)
+
+    if not prompt:
+        typer.echo(f"{Colors.RED}✗ Prompt '{prompt_id}' not found{Colors.RESET}")
+        raise typer.Exit(1)
+
+    target_app = resolve_single_app(app_type, VALID_APP_TYPES)
+
+    try:
+        manager.activate(prompt_id, app_type=target_app)
+        typer.echo(
+            f"{Colors.GREEN}✓ Enabled '{prompt_id}' for {target_app}{Colors.RESET}"
+        )
+        typer.echo(
+            f"  {Colors.CYAN}Tip:{Colors.RESET} Use 'cam prompt sync -a {target_app}' to write to file"
+        )
+    except ValueError as e:
+        typer.echo(f"{Colors.RED}✗ Error: {e}{Colors.RESET}")
+        raise typer.Exit(1)
+
+
+@prompt_app.command("disable")
+def disable_prompt(
+    prompt_id: str = typer.Argument(..., help="Prompt identifier to disable"),
+):
+    """Disable a prompt.
+
+    This marks the prompt as inactive. The prompt file is not modified.
+    Use 'unsync' command to clear the app's prompt file.
+    """
+    manager = _get_prompt_manager()
+    prompt = manager.get(prompt_id)
+
+    if not prompt:
+        typer.echo(f"{Colors.RED}✗ Prompt '{prompt_id}' not found{Colors.RESET}")
+        raise typer.Exit(1)
+
+    try:
+        manager.deactivate(prompt_id)
+        typer.echo(f"{Colors.GREEN}✓ Disabled '{prompt_id}'{Colors.RESET}")
+    except ValueError as e:
+        typer.echo(f"{Colors.RED}✗ Error: {e}{Colors.RESET}")
+        raise typer.Exit(1)
+
+
 @prompt_app.command("sync")
 def sync_prompts(
     prompt_id: Optional[str] = typer.Argument(
