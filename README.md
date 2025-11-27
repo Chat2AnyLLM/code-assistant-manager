@@ -1,129 +1,203 @@
 # code-assistant-manager
 
-Unified Python CLI for AI coding assistants — a focused, concise guide.
+<div align="center">
 
-Overview
+[![PyPI Version](https://img.shields.io/pypi/v/code-assistant-manager?color=blue)](https://pypi.org/project/code-assistant-manager/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
+[![Python Versions](https://img.shields.io/pypi/pyversions/code-assistant-manager.svg)](https://pypi.org/project/code-assistant-manager/)
 
-code-assistant-manager provides a single CLI to access multiple AI coding assistants (Claude, Codex, Qwen, GitHub Copilot, and more). It offers interactive model selection, configurable endpoints, secure environment management, MCP server integration, **prompt and skill management**, and a polished terminal UI.
+**Unified Python CLI for AI Coding Assistants**
+<br>
+Manage Claude, Codex, Gemini, Qwen, and more from a single, polished terminal interface.
 
-Deep analysis of this repository (developer-focused)
+[Quick Start](#quick-start) • [Features](#core-features) • [Interactive Mode](#interactive-mode) • [Commands](#subcommands-reference) • [MCP Support](#model-context-protocol-mcp) • [Contributing](#contributing)
 
-This section is intended to give contributors and maintainers a clear, practical understanding of the repository layout, architecture, important files, runtime behavior, and recommended workflows for development and release.
+</div>
 
-Repository layout
+---
 
-- code_assistant_manager/ — main Python package implementing the CLI, tools registry, MCP support, menus and utilities.
-  - cli.py: Main Typer-based CLI and legacy compatibility layer. Key commands: launch, upgrade/install, uninstall, doctor, completion. (file: code_assistant_manager/cli.py)
-  - __init__.py: Package metadata and __version__.
-  - prompts.py: Prompt management for AI assistants.
-  - skills.py: Skill management for AI assistants.
-  - tools/: Tool implementations and CLITool interface.
-  - mcp/: MCP subsystem with manager, CLI, server registry JSONs. (files: code_assistant_manager/mcp/manager.py, server_commands.py, cli.py, registry/servers/*.json)
-  - menu/: Terminal UI components and centered menus used to select tools interactively.
-  - config.py, env_loader.py: Configuration parsing and .env helper utilities.
-  - list_models_cmd supports three forms now: (1) a python module invocation (e.g. "python -m code_assistant_manager.litellm_models"), (2) legacy shell commands (e.g. "curl ... | jq -r '.data.[].id'"), and (3) a plain space-separated model list (e.g. "qwen3-max qwen3-coder-plus").
+## Core Features
 
-- tests/: Pytest test suite (unit, integration, interactive). Test configuration in pytest.ini. Run with: python -m pytest tests/
+*   **Unified CLI:** One tool (`cam`) to manage multiple AI assistants.
+*   **Interactive Menus:** Polished TUI for model selection and tool launching.
+*   **Prompt Management:** Fetch, sync, and manage system prompts across different assistants.
+*   **Skill Management:** Install and manage "skills" (tool definitions) for your AI agents.
+*   **MCP Integration:** Full support for the Model Context Protocol (MCP) - manage servers and tools.
+*   **Diagnostics:** Built-in `doctor` command to check environment health.
+*   **Extensible:** Easy to add new models and providers via LiteLLM.
 
-- docs/: Supporting documentation (developer guides, API docs, testing notes).
+## Quick Start
 
-- tools.yaml: Tool installation and environment setup metadata used by the upgrade/install flows.
+### Installation
 
-Key files and responsibilities
+```bash
+pip install code-assistant-manager
+```
 
-- pyproject.toml and setup.py: Packaging metadata and entry points for the CLIs (code-assistant-manager, cam). Prefer pyproject as source-of-truth for modern builds, setup.py exists for compatibility.
+### Basic Usage
 
-- README.md (this file): User-facing quick-start and developer deep analysis (this section).
+Launch the interactive menu:
 
-- docs/PROMPTS_AND_SKILLS.md: Guide for managing prompts and skills.
+```bash
+cam launch
+```
 
-- docs/INSTALL.md: Detailed installation options and scripts.
+## Interactive Mode
 
-- docs/CLAUDE.md: Repository guidelines for AI-assisted edits. Important: follow these when creating AI-generated changes.
+The easiest way to use CAM is through the interactive launcher:
 
-- pytest.ini: Configures test discovery and pytest run options.
+```bash
+cam launch
+```
+This opens a centered menu where you can:
+*   **Select Model:** Choose the active LLM model for your sessions.
+*   **Launch Assistant:** Start specific assistants (Claude, Codex, etc.) with the selected configuration.
+*   **Manage Settings:** Configure API keys and other preferences.
 
-Entrypoints and CLI flow
+## Subcommands Reference
 
-- Console scripts: `code-assistant-manager` and `cam` map to code_assistant_manager.cli:main (pyproject.toml and setup.py).
+CAM offers a rich set of subcommands for advanced management.
 
-- The CLI is implemented with Typer (click-based). Subcommands include `launch` (interactive menu or per-tool commands), `version` (show version information), `mcp` (MCP server management), `prompt` (prompt management), `skill` (skill management), `upgrade`/`install` (tool installers), `doctor` (diagnostics), `completion` (generate shell completion script).
+### Main Commands
 
-- `cli.py` also contains compatibility code that allows `code-assistant-manager <tool>` direct invocation and a legacy `main()` wrapper for backward compatibility.
+| Command | Description |
+| :--- | :--- |
+| `cam launch` | Open the interactive menu or launch specific tools directly (e.g., `cam launch claude`). |
+| `cam doctor` | specific Run diagnostic checks on your environment, API keys, and configuration. |
+| `cam version` | Display the current version of CAM. |
+| `cam upgrade` | Update underlying tools (like `claude-engineer`, `aider`, etc.) to their latest versions. |
 
-Development workflow and testing
+### Prompt Management (`cam prompt`)
 
-- Run tests locally with `python -m pytest tests/`. The repository uses pytest.ini to set testpaths and addopts.
+Manage and sync system prompts across all your AI assistants.
 
-- Recommended local development flow:
-  1. Create a feature branch: feature/<desc> or fix/<desc>.
-  2. Run linters and formatters (project uses Black/Flake8? not enforced in repo snapshot) and the full test suite.
-  3. Make focused commits and open a PR with tests and a clear description. Include `Co-Authored-By: Claude <noreply@anthropic.com>` when AI-assisted edits were used (see docs/CLAUDE.md).
+```bash
+# List all available prompts
+cam prompt list
 
-- Tests are fairly extensive and broken into unit, integration, and interactive categories under tests/.
+# Fetch latest prompts from remote repositories
+cam prompt fetch
 
-MCP subsystem
+# View details of a specific prompt
+cam prompt view <prompt_id>
 
-- MCP (Model Connector Protocol) manager and registry lives under code_assistant_manager/mcp/. The registry contains server JSON definitions for many MCP servers (registry/servers/*.json).
+# Set a specific prompt as the default active prompt
+cam prompt set-default <prompt_id>
 
-- MCP CLI integrates as a Typer app (mcp/cli.py). Use `code-assistant-manager mcp server list` and related commands to manage MCP servers.
+# Sync the default prompt to all installed assistants
+cam prompt sync
 
-Tools & installer logic
+# Sync a specific prompt to a specific assistant
+cam prompt sync <prompt_id> --app gemini
 
-- tools.yaml contains installer commands for each tool (npm installs, curl downloads, etc.). The upgrade/install flow uses this registry to perform global `npm install -g` operations and detect versions.
+# Create a new prompt from a file
+cam prompt create my-new-prompt --file ./my_prompt.md
 
-- Each tool implements a CLITool-like interface exposing: command_name, _check_command_available(), _get_version(), and _perform_upgrade(). The CLI orchestrates parallel upgrades using ThreadPoolExecutor.
+# Import the current live prompt from an assistant
+cam prompt import-live --app claude --name "My Claude Prompt"
+```
 
-Security & configuration
+### Skill Management (`cam skill`)
 
-- Sensitive API keys should be provided via environment variables (recommended) or a .env file loaded by env_loader.py. The doctor command performs basic security checks (checks for common key patterns and file permissions).
+Equip your assistants with new capabilities (tools/skills).
 
-- Recommended: Keep .env out of version control; use OS keyrings or CI secrets for production environments.
+```bash
+# Discover available skills from configured repositories
+cam skill fetch
 
-Repository strengths
+# List all skills and their installation status
+cam skill list
 
-- Comprehensive CLI UX: Typer-based app with interactive menus, shell completion, and clear commands.
+# View details of a skill
+cam skill view <skill_id>
 
-- MCP integration: Extensible server registry and CLI to add/remove/list/refresh servers.
+# Install a skill to a specific assistant (or 'all')
+cam skill install <skill_id> --app all
 
-- Solid diagnostics: `doctor` performs many helpful checks (env, config permissions, installed tools, endpoints, cache, basic security scanning).
+# Uninstall a skill
+cam skill uninstall <skill_id>
 
-- Tests: Structured test suite ready for CI.
+# Manage skill repositories
+cam skill repos                 # List repositories
+cam skill add-repo ...          # Add a new GitHub repo
+```
 
-Areas for improvement and recommendations
+### Model Context Protocol (`cam mcp`)
 
-1. Add CI configuration (GitHub Actions or equivalent). The repo lacks .github/workflows/. Provide jobs for linting, tests, type-checking (mypy/pydantic checks), and security scans.
+Manage MCP servers to connect your AI assistants to external data and tools.
 
-2. Add pre-commit hooks with formatting/linting (Black, isort, Flake8) and run them in CI.
+```bash
+# List registered and installed MCP servers
+cam mcp server list
 
-3. Consider replacing global `npm install -g` patterns with safer per-user or containerized installers (or document the implications clearly).
+# Search for available MCP servers
+cam mcp server search "postgres"
 
-4. Add a Dockerfile and/or GitHub Codespaces devcontainer for easy contributor setup.
+# Show details for a server
+cam mcp server show "postgres"
 
-5. Hardening: Add secrets scanning to CI and improve the heuristic used in the doctor security check (e.g., integrate detect-secrets or truffleHog).
+# Install an MCP server
+cam mcp server add "postgres" --client all
 
-6. Documentation: docs/CONTRIBUTING.md and CODE_OF_CONDUCT.md to standardize PR process and contributor expectations (though docs/CLAUDE.md provides AI-specific guidance).
+# Remove an MCP server
+cam mcp server remove "postgres"
+```
 
-7. Release automation: Add a release workflow for pushing to PyPI and draft GitHub releases; ensure version bumping is automated (bump2version or similar).
+## Supported Assistants
 
-Recommended TODOs for the project (short term)
+CAM provides management and wrappers for:
 
-- Add GitHub Actions workflow with jobs: lint, test, build, publish-check (no publish), and security-scan.
-- Add a Makefile with common commands: make test, make lint, make format, make release.
-- Add CONTRIBUTING.md summarizing CLAUDE.md for human contributors and CI expectations.
-- Add a Dockerfile for a reproducible developer environment.
+*   **Claude** (Anthropic)
+*   **Codex** (OpenAI / GitHub Copilot CLI)
+*   **Gemini** (Google)
+*   **Qwen** (Alibaba Cloud)
+*   **LiteLLM** (Access to 100+ models via proxy)
 
-How to review changes made by AI
+## Configuration
 
-- Per CLAUDE.md: Treat AI edits as drafts. Review line-by-line, run tests, and annotate generated code with a short AI-assisted comment.
+CAM uses a combination of configuration files and environment variables.
 
-Appendix: Quick file references
+*   **Configuration Directory:** `~/.config/code-assistant-manager/` (Linux/Mac)
+*   **Environment Variables:** Create a `.env` file in your project root or home directory.
 
-- Main CLI: code_assistant_manager/cli.py:1
-- Package version: code_assistant_manager/__init__.py:17
-- MCP manager: code_assistant_manager/mcp/manager.py
-- Tools registry: code_assistant_manager/tools.yaml
-- Tests: tests/ (run with pytest)
-- Packaging: pyproject.toml, setup.py
+Example `.env`:
+```env
+OPENAI_API_KEY=sk-...
+ANTHROPIC_API_KEY=sk-ant-...
+GEMINI_API_KEY=...
+```
 
-Last updated: 2025-10-28
+## Contributing
+
+### Development Setup
+
+1.  Clone the repository:
+    ```bash
+    git clone https://github.com/Chat2AnyLLM/code-assistant-manager.git
+    cd code-assistant-manager
+    ```
+
+2.  Install dependencies:
+    ```bash
+    pip install -e ".[dev]"
+    ```
+
+3.  Run tests:
+    ```bash
+    pytest tests/
+    ```
+
+### Repository Structure
+
+*   `code_assistant_manager/`: Main package source.
+    *   `cli.py`: Entry point.
+    *   `mcp/`: MCP subsystem.
+    *   `prompts.py`: Prompt logic.
+    *   `skills.py`: Skill logic.
+*   `tests/`: Comprehensive test suite.
+
+See [docs/](docs/) for more detailed developer guides.
+
+## License
+
+This project is licensed under the MIT License.

@@ -102,7 +102,7 @@ Output:
 
   server-memory: npx -y @modelcontextprotocol/server-memory - ✓ Connected
   context7: npx -y @upstash/context7-mcp@latest - ✓ Connected
-  serena: uvx --from /home/jzhu/projects/repos/serena serena start-mcp-server - ✓ Connected
+  serena: uvx --from serena serena start-mcp-server - ✓ Connected
 =====================================================================================================
 
 # List all MCP servers for all tools (multiple frames)
