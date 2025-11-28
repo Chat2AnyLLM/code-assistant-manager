@@ -8,7 +8,9 @@
     "repoName": "compounding-engineering-plugin",
     "repoBranch": "main",
     "pluginPath": "plugins/compounding-engineering",
-    "aliases": ["every-marketplace"]
+    "aliases": [
+      "every-marketplace"
+    ]
   },
   "claude-code-plugins-plus": {
     "name": "claude-code-plugins-plus",
@@ -26,6 +28,24 @@
     "type": "marketplace",
     "repoOwner": "obra",
     "repoName": "superpowers-marketplace",
+    "repoBranch": "main"
+  },
+  "awesome-claude-code-plugins": {
+    "name": "awesome-claude-code-plugins",
+    "description": "Awesome Claude Code plugins collection",
+    "enabled": true,
+    "type": "marketplace",
+    "repoOwner": "ccplugins",
+    "repoName": "awesome-claude-code-plugins",
+    "repoBranch": "main"
+  },
+  "claude-code-marketplace": {
+    "name": "claude-code-marketplace",
+    "description": "A marketplace for Claude Code plugins",
+    "enabled": true,
+    "type": "marketplace",
+    "repoOwner": "ananddtyagi",
+    "repoName": "claude-code-marketplace",
     "repoBranch": "main"
   }
 }
