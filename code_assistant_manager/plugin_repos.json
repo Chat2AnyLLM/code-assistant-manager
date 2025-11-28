@@ -2,20 +2,30 @@
   "compounding-engineering": {
     "name": "compounding-engineering",
     "description": "A Claude Code plugin for compounding engineering practices",
+    "enabled": true,
+    "type": "plugin",
     "repoOwner": "EveryInc",
     "repoName": "compounding-engineering-plugin",
     "repoBranch": "main",
     "pluginPath": "plugins/compounding-engineering",
-    "type": "plugin",
-    "enabled": true
+    "aliases": ["every-marketplace"]
   },
   "claude-code-plugins-plus": {
     "name": "claude-code-plugins-plus",
-    "description": "A marketplace with 100+ Claude Code plugins for various domains",
+    "description": "A comprehensive marketplace and educational hub for Claude Code plugins",
+    "enabled": true,
+    "type": "marketplace",
     "repoOwner": "jeremylongshore",
     "repoName": "claude-code-plugins-plus",
-    "repoBranch": "main",
+    "repoBranch": "main"
+  },
+  "superpowers-marketplace": {
+    "name": "superpowers-marketplace",
+    "description": "Curated Claude Code plugins: skills, workflows, and productivity tools",
+    "enabled": true,
     "type": "marketplace",
-    "enabled": true
+    "repoOwner": "obra",
+    "repoName": "superpowers-marketplace",
+    "repoBranch": "main"
   }
 }

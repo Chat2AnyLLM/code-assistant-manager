@@ -32,6 +32,7 @@ def _load_builtin_plugin_repos() -> Dict[str, PluginRepo]:
                     plugin_path=repo_data.get("pluginPath"),
                     enabled=repo_data.get("enabled", True),
                     type=repo_data.get("type", "plugin"),
+                    aliases=repo_data.get("aliases", []),
                 )
             logger.debug(f"Loaded {len(repos)} builtin plugin repos")
         except Exception as e:
@@ -234,8 +235,11 @@ class PluginManager:
         return BUILTIN_PLUGIN_REPOS.copy()
 
     def get_builtin_repo(self, name: str) -> Optional[PluginRepo]:
-        """Get a built-in plugin repository by name."""
-        return BUILTIN_PLUGIN_REPOS.get(name)
+        """Get a built-in plugin repository by name (supports aliases)."""
+        resolved = self._resolve_repo_name(name, self.get_builtin_repos())
+        if resolved:
+            return BUILTIN_PLUGIN_REPOS.get(resolved)
+        return None
 
     # ==================== User Plugin Repos ====================
 
@@ -258,6 +262,7 @@ class PluginManager:
                     plugin_path=repo_data.get("pluginPath"),
                     enabled=repo_data.get("enabled", True),
                     type=repo_data.get("type", "plugin"),
+                    aliases=repo_data.get("aliases", []),
                 )
             return repos
         except Exception as e:
@@ -275,9 +280,12 @@ class PluginManager:
         return self._load_user_repos()
 
     def get_user_repo(self, name: str) -> Optional[PluginRepo]:
-        """Get a user plugin repository by name."""
-        repos = self._load_user_repos()
-        return repos.get(name)
+        """Get a user plugin repository by name (supports aliases)."""
+        user_repos = self._load_user_repos()
+        resolved = self._resolve_repo_name(name, user_repos)
+        if resolved:
+            return user_repos.get(resolved)
+        return None
 
     def add_user_repo(self, repo: PluginRepo) -> None:
         """Add or update a user plugin repository."""
@@ -302,14 +310,28 @@ class PluginManager:
         repos.update(self._load_user_repos())
         return repos
 
+    def _resolve_repo_name(
+        self, name: str, repos: Dict[str, PluginRepo]
+    ) -> Optional[str]:
+        """Resolve a repo name, checking for aliases. Returns the canonical name or None."""
+        # First check if it's a direct match
+        if name in repos:
+            return name
+
+        # Check if it's an alias
+        for canonical_name, repo in repos.items():
+            if name in repo.aliases:
+                return canonical_name
+
+        return None
+
     def get_repo(self, name: str) -> Optional[PluginRepo]:
-        """Get a plugin repo by name (user repos take precedence)."""
-        # Check user repos first
-        user_repo = self.get_user_repo(name)
-        if user_repo:
-            return user_repo
-        # Fall back to builtin
-        return self.get_builtin_repo(name)
+        """Get a plugin repo by name, supporting aliases (user repos take precedence)."""
+        all_repos = self.get_all_repos()
+        resolved = self._resolve_repo_name(name, all_repos)
+        if resolved:
+            return all_repos.get(resolved)
+        return None
 
     # ==================== Installation Operations ====================
 

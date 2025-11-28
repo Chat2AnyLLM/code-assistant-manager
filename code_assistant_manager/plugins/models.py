@@ -146,6 +146,7 @@ class PluginRepo:
     plugin_path: Optional[str] = None
     enabled: bool = True
     type: str = "plugin"  # "plugin" or "marketplace"
+    aliases: List[str] = field(default_factory=list)  # Alternative names for this entry
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
@@ -163,6 +164,8 @@ class PluginRepo:
             data["repoBranch"] = self.repo_branch
         if self.plugin_path:
             data["pluginPath"] = self.plugin_path
+        if self.aliases:
+            data["aliases"] = self.aliases
         return data
 
     @classmethod
@@ -176,4 +179,5 @@ class PluginRepo:
             repo_branch=data.get("repoBranch", "main"),
             plugin_path=data.get("pluginPath"),
             enabled=data.get("enabled", True),
+            aliases=data.get("aliases", []),
         )
