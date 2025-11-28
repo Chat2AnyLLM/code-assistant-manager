@@ -507,27 +507,18 @@ def browse_marketplace(
             typer.echo(f"  • {name}")
         raise typer.Exit(1)
 
-    if repo.type != "marketplace":
-        typer.echo(
-            f"{Colors.RED}✗ '{marketplace}' is a plugin, not a marketplace.{Colors.RESET}"
-        )
-        typer.echo(
-            f"\n{Colors.CYAN}To install:{Colors.RESET} cam plugin install {marketplace}"
-        )
-        raise typer.Exit(1)
-
     typer.echo(f"{Colors.CYAN}Fetching plugins from {marketplace}...{Colors.RESET}")
 
     # Fetch marketplace info
     if not repo.repo_owner or not repo.repo_name:
-        typer.echo(f"{Colors.RED}✗ Marketplace missing repo info.{Colors.RESET}")
+        typer.echo(f"{Colors.RED}✗ Repo missing owner/name info.{Colors.RESET}")
         raise typer.Exit(1)
 
     from code_assistant_manager.plugins.fetch import fetch_repo_info
 
     info = fetch_repo_info(repo.repo_owner, repo.repo_name, repo.repo_branch)
     if not info or not info.plugins:
-        typer.echo(f"{Colors.RED}✗ Could not fetch marketplace plugins.{Colors.RESET}")
+        typer.echo(f"{Colors.RED}✗ Could not fetch plugins from repo.{Colors.RESET}")
         raise typer.Exit(1)
 
     # Filter plugins

@@ -145,7 +145,9 @@ def fetch_repo_info(
     plugins = data.get("plugins", [])
     plugin_count = len(plugins)
 
-    # Determine type based on plugin count
+    # Determine type: if it has a marketplace.json with plugins array, it's a marketplace
+    # Even single-plugin repos can be marketplaces if structured that way
+    # We use plugin_count > 1 as heuristic, but the file structure indicates marketplace
     if plugin_count > 1:
         repo_type = "marketplace"
         plugin_path = None  # Marketplaces don't have a single plugin path
@@ -168,7 +170,7 @@ def fetch_repo_info(
         type=repo_type,
         plugin_path=plugin_path,
         plugin_count=plugin_count,
-        plugins=plugins if repo_type == "marketplace" else None,
+        plugins=plugins,  # Always include plugins list for browse command
         version=version,
         homepage=homepage,
     )
