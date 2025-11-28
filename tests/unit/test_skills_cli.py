@@ -1,11 +1,12 @@
 """CLI tests for skill commands."""
 
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 
 import code_assistant_manager.cli.skills_commands as skills_commands
-from code_assistant_manager.skills import Skill
+from code_assistant_manager.skills import VALID_APP_TYPES, Skill
 
 
 @pytest.fixture
@@ -21,6 +22,7 @@ def dummy_skill_manager(monkeypatch, tmp_path):
             self.created_skills = []
             self.updated_skills = []
             self.deleted_skills = []
+            self._handlers = {}
 
         def sync_installed_status(self, app):
             self.synced.append(app)
@@ -50,6 +52,14 @@ def dummy_skill_manager(monkeypatch, tmp_path):
             if key in self.skills:
                 del self.skills[key]
 
+        def get_handler(self, app):
+            if app not in self._handlers:
+                mock_handler = MagicMock()
+                mock_handler.skills_dir = tmp_path / app
+                mock_handler.skills_dir.mkdir(exist_ok=True)
+                self._handlers[app] = mock_handler
+            return self._handlers[app]
+
     manager = DummyManager()
     monkeypatch.setattr(skills_commands, "_get_skill_manager", lambda: manager)
     return manager
@@ -57,15 +67,10 @@ def dummy_skill_manager(monkeypatch, tmp_path):
 
 def test_skill_list_all_apps(dummy_skill_manager):
     skills_commands.list_skills(app_type="all")
-    assert dummy_skill_manager.synced == skills_commands.VALID_APP_TYPES
+    assert dummy_skill_manager.synced == VALID_APP_TYPES
 
 
 def test_skill_install_multiple_apps(dummy_skill_manager, tmp_path, monkeypatch):
-    install_dirs = {app: tmp_path / app for app in skills_commands.VALID_APP_TYPES}
-    for directory in install_dirs.values():
-        directory.mkdir()
-    monkeypatch.setattr(skills_commands, "SKILL_INSTALL_DIRS", install_dirs)
-
     skills_commands.install_skill("demo-skill", app_type="claude,codex")
     assert dummy_skill_manager.installs == [
         ("demo-skill", "claude"),
@@ -75,23 +80,28 @@ def test_skill_install_multiple_apps(dummy_skill_manager, tmp_path, monkeypatch)
 
 def test_skill_installed_all_apps(monkeypatch, tmp_path, capsys):
     install_dirs = {}
-    for app in skills_commands.VALID_APP_TYPES:
+    handlers = {}
+    for app in VALID_APP_TYPES:
         app_dir = tmp_path / app
         app_dir.mkdir()
         (app_dir / "example").mkdir()
         install_dirs[app] = app_dir
-
-    monkeypatch.setattr(skills_commands, "SKILL_INSTALL_DIRS", install_dirs)
+        mock_handler = MagicMock()
+        mock_handler.skills_dir = app_dir
+        handlers[app] = mock_handler
 
     class Manager:
         def get_all(self):
             return {}
 
+        def get_handler(self, app):
+            return handlers.get(app)
+
     monkeypatch.setattr(skills_commands, "_get_skill_manager", lambda: Manager())
 
     skills_commands.list_installed_skills(app_type="all")
     captured = capsys.readouterr().out
-    for app in skills_commands.VALID_APP_TYPES:
+    for app in VALID_APP_TYPES:
         assert f"{app.capitalize()}" in captured
 
 
@@ -205,22 +215,12 @@ def test_delete_skill_not_found(dummy_skill_manager, capsys):
 
 def test_uninstall_skill_success(dummy_skill_manager, tmp_path, monkeypatch):
     """uninstall_skill removes skill from app."""
-    install_dirs = {app: tmp_path / app for app in skills_commands.VALID_APP_TYPES}
-    for directory in install_dirs.values():
-        directory.mkdir()
-    monkeypatch.setattr(skills_commands, "SKILL_INSTALL_DIRS", install_dirs)
-
     skills_commands.uninstall_skill("test-skill", app_type="claude")
     assert dummy_skill_manager.uninstalls == [("test-skill", "claude")]
 
 
 def test_uninstall_skill_multiple_apps(dummy_skill_manager, tmp_path, monkeypatch):
     """uninstall_skill removes skill from multiple apps."""
-    install_dirs = {app: tmp_path / app for app in skills_commands.VALID_APP_TYPES}
-    for directory in install_dirs.values():
-        directory.mkdir()
-    monkeypatch.setattr(skills_commands, "SKILL_INSTALL_DIRS", install_dirs)
-
     skills_commands.uninstall_skill("test-skill", app_type="claude,codex")
     assert dummy_skill_manager.uninstalls == [
         ("test-skill", "claude"),

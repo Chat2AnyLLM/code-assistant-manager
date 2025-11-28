@@ -9,12 +9,13 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from code_assistant_manager.skills import (
-    DEFAULT_SKILL_REPOS,
-    SKILL_INSTALL_DIRS,
+    VALID_APP_TYPES,
+    ClaudeSkillHandler,
     Skill,
     SkillManager,
     SkillRepo,
 )
+from code_assistant_manager.skills.manager import DEFAULT_SKILL_REPOS
 
 
 class TestSkill:
@@ -297,8 +298,8 @@ class TestSkillManager:
         repos = manager.get_repos()
         assert len(repos) == len(DEFAULT_SKILL_REPOS)
 
-        # Calling init_default_repos again should be idempotent
-        manager.init_default_repos()
+        # Calling _init_default_repos_file again should be idempotent
+        manager._init_default_repos_file()
         repos = manager.get_repos()
         assert len(repos) == len(DEFAULT_SKILL_REPOS)
 
@@ -316,11 +317,10 @@ class TestSkillManager:
         manager.create(skill1)
         manager.create(skill2)
 
-        # Mock the install directory
-        with patch.dict(
-            "code_assistant_manager.skills.SKILL_INSTALL_DIRS",
-            {"test_app": temp_install_dir},
-        ):
+        # Create a mock handler with temp install directory
+        mock_handler = ClaudeSkillHandler(skills_dir_override=temp_install_dir)
+
+        with patch.object(manager, "get_handler", return_value=mock_handler):
             # Create skill1 directory in install location with SKILL.md
             skill1_dir = temp_install_dir / "skill1"
             skill1_dir.mkdir(parents=True)
@@ -340,10 +340,10 @@ class TestSkillManager:
         skill = Skill(key="test", name="Test", description="Desc", directory="my-skill")
         manager.create(skill)
 
-        with patch.dict(
-            "code_assistant_manager.skills.SKILL_INSTALL_DIRS",
-            {"test_app": temp_install_dir},
-        ):
+        # Create a mock handler with temp install directory
+        mock_handler = ClaudeSkillHandler(skills_dir_override=temp_install_dir)
+
+        with patch.object(manager, "get_handler", return_value=mock_handler):
             # Create skill directory with SKILL.md
             skill_dir = temp_install_dir / "my-skill"
             skill_dir.mkdir(parents=True)
@@ -356,7 +356,7 @@ class TestSkillManager:
 
     def test_parse_skill_metadata(self, temp_config_dir):
         """Test parsing SKILL.md metadata."""
-        manager = SkillManager(temp_config_dir)
+        handler = ClaudeSkillHandler(skills_dir_override=temp_config_dir)
 
         skill_md = temp_config_dir / "SKILL.md"
         skill_md.write_text(
@@ -371,28 +371,28 @@ This is the skill content.
 """
         )
 
-        meta = manager._parse_skill_metadata(skill_md)
+        meta = handler.parse_skill_metadata(skill_md)
         assert meta.get("name") == "Test Skill"
         assert meta.get("description") == "A test skill description"
 
     def test_parse_skill_metadata_no_frontmatter(self, temp_config_dir):
         """Test parsing SKILL.md without frontmatter."""
-        manager = SkillManager(temp_config_dir)
+        handler = ClaudeSkillHandler(skills_dir_override=temp_config_dir)
 
         skill_md = temp_config_dir / "SKILL.md"
         skill_md.write_text("# Just Content\n\nNo frontmatter here.")
 
-        meta = manager._parse_skill_metadata(skill_md)
+        meta = handler.parse_skill_metadata(skill_md)
         assert meta == {}
 
     def test_parse_skill_metadata_invalid_yaml(self, temp_config_dir):
         """Test parsing SKILL.md with invalid YAML."""
-        manager = SkillManager(temp_config_dir)
+        handler = ClaudeSkillHandler(skills_dir_override=temp_config_dir)
 
         skill_md = temp_config_dir / "SKILL.md"
         skill_md.write_text("---\ninvalid: yaml: content:\n---\n# Content")
 
-        meta = manager._parse_skill_metadata(skill_md)
+        meta = handler.parse_skill_metadata(skill_md)
         assert meta == {}
 
 
@@ -438,10 +438,10 @@ Content here.
         skill = Skill(key="test", name="Test", description="Desc", directory="my-skill")
         manager.create(skill)
 
-        with patch.dict(
-            "code_assistant_manager.skills.SKILL_INSTALL_DIRS",
-            {"claude": temp_install_dir},
-        ):
+        # Create a mock handler with temp install directory
+        mock_handler = ClaudeSkillHandler(skills_dir_override=temp_install_dir)
+
+        with patch.object(manager, "get_handler", return_value=mock_handler):
             with pytest.raises(ValueError, match="no repository information"):
                 manager.install("test", "claude")
 
@@ -464,10 +464,10 @@ Content here.
         skill_dir.mkdir(parents=True)
         (skill_dir / "SKILL.md").write_text("# Skill")
 
-        with patch.dict(
-            "code_assistant_manager.skills.SKILL_INSTALL_DIRS",
-            {"claude": temp_install_dir},
-        ):
+        # Create a mock handler with temp install directory
+        mock_handler = ClaudeSkillHandler(skills_dir_override=temp_install_dir)
+
+        with patch.object(manager, "get_handler", return_value=mock_handler):
             manager.uninstall("test", "claude")
 
             # Check skill directory was removed
@@ -491,10 +491,10 @@ Content here.
         )
         manager.create(skill)
 
-        with patch.dict(
-            "code_assistant_manager.skills.SKILL_INSTALL_DIRS",
-            {"claude": temp_install_dir},
-        ):
+        # Create a mock handler with temp install directory
+        mock_handler = ClaudeSkillHandler(skills_dir_override=temp_install_dir)
+
+        with patch.object(manager, "get_handler", return_value=mock_handler):
             # Should not raise even if directory doesn't exist
             manager.uninstall("test", "claude")
 
@@ -505,12 +505,12 @@ Content here.
 class TestSkillConstants:
     """Test skill module constants."""
 
-    def test_skill_install_dirs(self):
-        """Test SKILL_INSTALL_DIRS contains expected apps."""
-        assert "claude" in SKILL_INSTALL_DIRS
-        assert "codex" in SKILL_INSTALL_DIRS
-        assert "gemini" in SKILL_INSTALL_DIRS
-        assert "droid" in SKILL_INSTALL_DIRS
+    def test_valid_app_types(self):
+        """Test VALID_APP_TYPES contains expected apps."""
+        assert "claude" in VALID_APP_TYPES
+        assert "codex" in VALID_APP_TYPES
+        assert "gemini" in VALID_APP_TYPES
+        assert "droid" in VALID_APP_TYPES
 
     def test_default_skill_repos(self):
         """Test DEFAULT_SKILL_REPOS has expected structure."""

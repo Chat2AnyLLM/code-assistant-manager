@@ -1,0 +1,9 @@
+{
+  "iannuttall/claude-agents": {
+    "owner": "iannuttall",
+    "name": "claude-agents",
+    "branch": "main",
+    "enabled": true,
+    "agentsPath": "agents"
+  }
+}

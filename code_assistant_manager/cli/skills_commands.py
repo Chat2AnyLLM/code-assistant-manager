@@ -13,7 +13,7 @@ from code_assistant_manager.cli.option_utils import (
 )
 from code_assistant_manager.menu.base import Colors
 from code_assistant_manager.skills import (
-    SKILL_INSTALL_DIRS,
+    VALID_APP_TYPES,
     Skill,
     SkillManager,
     SkillRepo,
@@ -25,9 +25,6 @@ skill_app = typer.Typer(
     help="Manage skills for AI assistants (Claude, Codex, Gemini, Droid)",
     no_args_is_help=True,
 )
-
-# Valid app types
-VALID_APP_TYPES = ["claude", "codex", "gemini", "droid"]
 
 
 def _get_skill_manager() -> SkillManager:
@@ -265,12 +262,12 @@ def install_skill(
 
     for app in target_apps:
         try:
+            handler = manager.get_handler(app)
             manager.install(skill_key, app)
-            install_dir = SKILL_INSTALL_DIRS.get(app)
             typer.echo(
                 f"{Colors.GREEN}✓ Skill installed to {app}: {skill_key}{Colors.RESET}"
             )
-            typer.echo(f"  {Colors.CYAN}Location:{Colors.RESET} {install_dir}")
+            typer.echo(f"  {Colors.CYAN}Location:{Colors.RESET} {handler.skills_dir}")
         except ValueError as e:
             typer.echo(f"{Colors.RED}✗ Error installing to {app}: {e}{Colors.RESET}")
             raise typer.Exit(1)
@@ -430,10 +427,15 @@ def list_installed_skills(
     )
 
     for app in target_apps:
-        install_dir = SKILL_INSTALL_DIRS.get(app)
+        try:
+            handler = manager.get_handler(app)
+        except ValueError:
+            continue
+
+        install_dir = handler.skills_dir
         typer.echo(f"\n{Colors.BOLD}{app.capitalize()} ({install_dir}):{Colors.RESET}")
 
-        if not install_dir or not install_dir.exists():
+        if not install_dir.exists():
             typer.echo(f"  {Colors.YELLOW}No skills installed{Colors.RESET}")
             continue
 
@@ -472,12 +474,19 @@ def uninstall_all_skills(
     force: bool = typer.Option(False, "--force", "-f", help="Skip confirmation"),
 ):
     """Uninstall all skills for one or more apps."""
+    import shutil
+
     target_apps = resolve_app_targets(app_type, VALID_APP_TYPES)
     manager = _get_skill_manager()
 
     for app in target_apps:
-        install_dir = SKILL_INSTALL_DIRS.get(app)
-        if not install_dir or not install_dir.exists():
+        try:
+            handler = manager.get_handler(app)
+        except ValueError:
+            continue
+
+        install_dir = handler.skills_dir
+        if not install_dir.exists():
             typer.echo(
                 f"{Colors.YELLOW}No skills directory found for {app}{Colors.RESET}"
             )
@@ -496,8 +505,6 @@ def uninstall_all_skills(
         removed_count = 0
         for skill_dir in skill_dirs:
             try:
-                import shutil
-
                 shutil.rmtree(skill_dir)
                 typer.echo(f"  {Colors.GREEN}✓{Colors.RESET} Removed: {skill_dir.name}")
                 removed_count += 1

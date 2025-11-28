@@ -8,6 +8,7 @@ from typing import List, Optional
 import typer
 from typer import Context
 
+from code_assistant_manager.cli.agents_commands import agent_app
 from code_assistant_manager.cli.plugin_commands import plugin_app
 from code_assistant_manager.cli.prompts_commands import prompt_app
 from code_assistant_manager.cli.skills_commands import skill_app
@@ -210,6 +211,9 @@ app.add_typer(skill_app, name="s", hidden=True)
 # Add the plugin app as a subcommand to the main app (Claude Code plugins)
 app.add_typer(plugin_app, name="plugin")
 app.add_typer(plugin_app, name="pl", hidden=True)
+# Add the agent app as a subcommand to the main app (Claude Code agents)
+app.add_typer(agent_app, name="agent")
+app.add_typer(agent_app, name="ag", hidden=True)
 
 
 @config_app.command("validate")

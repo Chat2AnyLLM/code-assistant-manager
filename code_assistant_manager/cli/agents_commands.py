@@ -1,0 +1,367 @@
+"""CLI commands for agent management."""
+
+import logging
+from pathlib import Path
+from typing import Optional
+
+import typer
+
+from code_assistant_manager.agents import (
+    VALID_APP_TYPES,
+    Agent,
+    AgentManager,
+    AgentRepo,
+)
+from code_assistant_manager.menu.base import Colors
+
+logger = logging.getLogger(__name__)
+
+agent_app = typer.Typer(
+    help="Manage agents for Claude Code (persona/behavior definitions)",
+    no_args_is_help=True,
+)
+
+
+def _get_agent_manager() -> AgentManager:
+    """Get agent manager instance."""
+    return AgentManager()
+
+
+@agent_app.command("list")
+def list_agents():
+    """List all agents."""
+    manager = _get_agent_manager()
+    manager.sync_installed_status()
+
+    agents = manager.get_all()
+
+    if not agents:
+        typer.echo(
+            f"{Colors.YELLOW}No agents found. Run 'cam agent fetch' to discover agents from repositories.{Colors.RESET}"
+        )
+        return
+
+    typer.echo(f"\n{Colors.BOLD}Agents:{Colors.RESET}\n")
+    for agent_key, agent in sorted(agents.items()):
+        status = (
+            f"{Colors.GREEN}✓{Colors.RESET}"
+            if agent.installed
+            else f"{Colors.RED}✗{Colors.RESET}"
+        )
+        color_badge = f" [{agent.color}]" if agent.color else ""
+        typer.echo(
+            f"{status} {Colors.BOLD}{agent.name}{Colors.RESET}{Colors.CYAN}{color_badge}{Colors.RESET} ({agent_key})"
+        )
+        if agent.description:
+            # Truncate long descriptions
+            desc = agent.description
+            if len(desc) > 100:
+                desc = desc[:97] + "..."
+            typer.echo(f"  {Colors.CYAN}Description:{Colors.RESET} {desc}")
+        if agent.tools:
+            typer.echo(f"  {Colors.CYAN}Tools:{Colors.RESET} {', '.join(agent.tools)}")
+        typer.echo()
+
+
+@agent_app.command("fetch")
+def fetch_agents():
+    """Fetch agents from configured repositories."""
+    manager = _get_agent_manager()
+
+    typer.echo(f"{Colors.CYAN}Fetching agents from repositories...{Colors.RESET}")
+
+    try:
+        agents = manager.fetch_agents_from_repos()
+        typer.echo(f"{Colors.GREEN}✓ Found {len(agents)} agents{Colors.RESET}")
+
+        for agent in agents[:10]:  # Show first 10
+            status = (
+                f"{Colors.GREEN}✓{Colors.RESET}"
+                if agent.installed
+                else f"{Colors.RED}✗{Colors.RESET}"
+            )
+            typer.echo(f"  {status} {agent.name} ({agent.key})")
+
+        if len(agents) > 10:
+            typer.echo(f"  ... and {len(agents) - 10} more")
+
+        typer.echo(
+            f"\n{Colors.CYAN}Run 'cam agent list' to see all agents{Colors.RESET}"
+        )
+    except Exception as e:
+        typer.echo(f"{Colors.RED}✗ Error fetching agents: {e}{Colors.RESET}")
+        raise typer.Exit(1)
+
+
+@agent_app.command("view")
+def view_agent(agent_key: str):
+    """View a specific agent."""
+    manager = _get_agent_manager()
+    agent = manager.get(agent_key)
+
+    if not agent:
+        typer.echo(f"{Colors.RED}✗ Agent '{agent_key}' not found{Colors.RESET}")
+        raise typer.Exit(1)
+
+    typer.echo(f"\n{Colors.BOLD}Agent: {agent.name}{Colors.RESET}")
+    typer.echo(f"{Colors.CYAN}Description:{Colors.RESET} {agent.description}")
+    typer.echo(f"{Colors.CYAN}Key:{Colors.RESET} {agent_key}")
+    typer.echo(f"{Colors.CYAN}Filename:{Colors.RESET} {agent.filename}")
+    status = (
+        f"{Colors.GREEN}installed{Colors.RESET}"
+        if agent.installed
+        else f"{Colors.RED}not installed{Colors.RESET}"
+    )
+    typer.echo(f"{Colors.CYAN}Status:{Colors.RESET} {status}")
+
+    if agent.tools:
+        typer.echo(f"{Colors.CYAN}Tools:{Colors.RESET} {', '.join(agent.tools)}")
+
+    if agent.color:
+        typer.echo(f"{Colors.CYAN}Color:{Colors.RESET} {agent.color}")
+
+    if agent.repo_owner and agent.repo_name:
+        typer.echo(
+            f"{Colors.CYAN}Repository:{Colors.RESET} {agent.repo_owner}/{agent.repo_name}"
+        )
+        typer.echo(f"{Colors.CYAN}Branch:{Colors.RESET} {agent.repo_branch or 'main'}")
+
+    if agent.agents_path:
+        typer.echo(f"{Colors.CYAN}Agents Path:{Colors.RESET} {agent.agents_path}")
+
+    if agent.readme_url:
+        typer.echo(f"{Colors.CYAN}URL:{Colors.RESET} {agent.readme_url}")
+
+    typer.echo()
+
+
+@agent_app.command("install")
+def install_agent(
+    agent_key: str = typer.Argument(..., help="Agent identifier"),
+    app_type: str = typer.Option(
+        "claude",
+        "--app",
+        "-a",
+        help="App type to install to (currently only 'claude' supported)",
+    ),
+):
+    """Install an agent to an app's agents directory."""
+    manager = _get_agent_manager()
+
+    try:
+        handler = manager.get_handler(app_type)
+        dest_path = manager.install(agent_key, app_type)
+        typer.echo(f"{Colors.GREEN}✓ Agent installed: {agent_key}{Colors.RESET}")
+        typer.echo(f"  {Colors.CYAN}Location:{Colors.RESET} {handler.agents_dir}")
+    except ValueError as e:
+        typer.echo(f"{Colors.RED}✗ Error: {e}{Colors.RESET}")
+        raise typer.Exit(1)
+
+
+@agent_app.command("uninstall")
+def uninstall_agent(
+    agent_key: str = typer.Argument(..., help="Agent identifier"),
+    app_type: str = typer.Option(
+        "claude",
+        "--app",
+        "-a",
+        help="App type to uninstall from (currently only 'claude' supported)",
+    ),
+    force: bool = typer.Option(False, "--force", "-f", help="Skip confirmation"),
+):
+    """Uninstall an agent from an app's agents directory."""
+    manager = _get_agent_manager()
+    agent = manager.get(agent_key)
+
+    if not agent:
+        typer.echo(f"{Colors.RED}✗ Agent '{agent_key}' not found{Colors.RESET}")
+        raise typer.Exit(1)
+
+    if not force:
+        typer.confirm(f"Uninstall agent '{agent.name}' ({agent_key})?", abort=True)
+
+    try:
+        manager.uninstall(agent_key, app_type)
+        typer.echo(f"{Colors.GREEN}✓ Agent uninstalled: {agent_key}{Colors.RESET}")
+    except ValueError as e:
+        typer.echo(f"{Colors.RED}✗ Error: {e}{Colors.RESET}")
+        raise typer.Exit(1)
+
+
+@agent_app.command("repos")
+def list_repos():
+    """List all agent repositories."""
+    manager = _get_agent_manager()
+    repos = manager.get_repos()
+
+    if not repos:
+        typer.echo(f"{Colors.YELLOW}No agent repositories configured{Colors.RESET}")
+        return
+
+    typer.echo(f"\n{Colors.BOLD}Agent Repositories:{Colors.RESET}\n")
+    for repo in repos:
+        status = (
+            f"{Colors.GREEN}✓{Colors.RESET}"
+            if repo.enabled
+            else f"{Colors.RED}✗{Colors.RESET}"
+        )
+        typer.echo(f"{status} {Colors.BOLD}{repo.owner}/{repo.name}{Colors.RESET}")
+        typer.echo(f"  {Colors.CYAN}Branch:{Colors.RESET} {repo.branch}")
+        if repo.agents_path:
+            typer.echo(f"  {Colors.CYAN}Agents Path:{Colors.RESET} {repo.agents_path}")
+        typer.echo()
+
+
+@agent_app.command("add-repo")
+def add_repo(
+    owner: str = typer.Option(..., "--owner", "-o", help="Repository owner"),
+    name: str = typer.Option(..., "--name", "-n", help="Repository name"),
+    branch: str = typer.Option("main", "--branch", "-b", help="Repository branch"),
+    agents_path: Optional[str] = typer.Option(
+        None, "--agents-path", help="Agents subdirectory path"
+    ),
+):
+    """Add an agent repository."""
+    manager = _get_agent_manager()
+
+    try:
+        repo = AgentRepo(
+            owner=owner,
+            name=name,
+            branch=branch,
+            enabled=True,
+            agents_path=agents_path,
+        )
+        manager.add_repo(repo)
+        typer.echo(f"{Colors.GREEN}✓ Repository added: {owner}/{name}{Colors.RESET}")
+    except Exception as e:
+        typer.echo(f"{Colors.RED}✗ Error: {e}{Colors.RESET}")
+        raise typer.Exit(1)
+
+
+@agent_app.command("remove-repo")
+def remove_repo(
+    owner: str = typer.Option(..., "--owner", "-o", help="Repository owner"),
+    name: str = typer.Option(..., "--name", "-n", help="Repository name"),
+    force: bool = typer.Option(False, "--force", "-f", help="Skip confirmation"),
+):
+    """Remove an agent repository."""
+    manager = _get_agent_manager()
+
+    if not force:
+        typer.confirm(f"Remove repository '{owner}/{name}'?", abort=True)
+
+    try:
+        manager.remove_repo(owner, name)
+        typer.echo(f"{Colors.GREEN}✓ Repository removed: {owner}/{name}{Colors.RESET}")
+    except ValueError as e:
+        typer.echo(f"{Colors.RED}✗ Error: {e}{Colors.RESET}")
+        raise typer.Exit(1)
+
+
+@agent_app.command("installed")
+def list_installed_agents(
+    app_type: str = typer.Option(
+        "claude",
+        "--app",
+        "-a",
+        help="App type to show installed agents for",
+    ),
+):
+    """Show installed agents."""
+    manager = _get_agent_manager()
+
+    try:
+        handler = manager.get_handler(app_type)
+    except ValueError as e:
+        typer.echo(f"{Colors.RED}✗ Error: {e}{Colors.RESET}")
+        raise typer.Exit(1)
+
+    agents_dir = handler.agents_dir
+    typer.echo(
+        f"\n{Colors.BOLD}{app_type.capitalize()} Agents ({agents_dir}):{Colors.RESET}"
+    )
+
+    if not agents_dir.exists():
+        typer.echo(f"  {Colors.YELLOW}No agents installed{Colors.RESET}")
+        return
+
+    installed = list(agents_dir.glob("*.md"))
+    if not installed:
+        typer.echo(f"  {Colors.YELLOW}No agents installed{Colors.RESET}")
+        return
+
+    all_agents = manager.get_all()
+
+    for agent_file in sorted(installed):
+        filename = agent_file.name
+
+        # Find matching agent in database
+        agent_key = None
+        for key, agent in all_agents.items():
+            if agent.filename.lower() == filename.lower():
+                agent_key = key
+                break
+
+        if agent_key:
+            agent = all_agents[agent_key]
+            typer.echo(
+                f"  {Colors.GREEN}✓{Colors.RESET} {agent.name} ({Colors.CYAN}{agent_key}{Colors.RESET})"
+            )
+        else:
+            typer.echo(f"  {Colors.GREEN}✓{Colors.RESET} {filename}")
+
+    typer.echo()
+
+
+@agent_app.command("uninstall-all")
+def uninstall_all_agents(
+    app_type: str = typer.Option(
+        "claude",
+        "--app",
+        "-a",
+        help="App type to uninstall all agents from",
+    ),
+    force: bool = typer.Option(False, "--force", "-f", help="Skip confirmation"),
+):
+    """Uninstall all agents."""
+    manager = _get_agent_manager()
+
+    try:
+        handler = manager.get_handler(app_type)
+    except ValueError as e:
+        typer.echo(f"{Colors.RED}✗ Error: {e}{Colors.RESET}")
+        raise typer.Exit(1)
+
+    agents_dir = handler.agents_dir
+    if not agents_dir.exists():
+        typer.echo(f"{Colors.YELLOW}No agents directory found{Colors.RESET}")
+        return
+
+    agent_files = list(agents_dir.glob("*.md"))
+    if not agent_files:
+        typer.echo(f"{Colors.YELLOW}No agents installed{Colors.RESET}")
+        return
+
+    if not force:
+        typer.confirm(
+            f"Uninstall all {len(agent_files)} agents from {app_type}?", abort=True
+        )
+
+    removed_count = 0
+    for agent_file in agent_files:
+        try:
+            agent_file.unlink()
+            typer.echo(f"  {Colors.GREEN}✓{Colors.RESET} Removed: {agent_file.name}")
+            removed_count += 1
+        except Exception as e:
+            typer.echo(
+                f"  {Colors.RED}✗{Colors.RESET} Failed to remove {agent_file.name}: {e}"
+            )
+
+    manager.sync_installed_status(app_type)
+    typer.echo(f"\n{Colors.GREEN}✓ Removed {removed_count} agents{Colors.RESET}")
+
+
+# Add list shorthand
+agent_app.command(name="ls", hidden=True)(list_agents)
