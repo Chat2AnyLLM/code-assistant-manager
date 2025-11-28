@@ -6,6 +6,16 @@
     "repoName": "compounding-engineering-plugin",
     "repoBranch": "main",
     "pluginPath": "plugins/compounding-engineering",
+    "type": "plugin",
+    "enabled": true
+  },
+  "claude-code-plugins-plus": {
+    "name": "claude-code-plugins-plus",
+    "description": "A marketplace with 100+ Claude Code plugins for various domains",
+    "repoOwner": "jeremylongshore",
+    "repoName": "claude-code-plugins-plus",
+    "repoBranch": "main",
+    "type": "marketplace",
     "enabled": true
   }
 }

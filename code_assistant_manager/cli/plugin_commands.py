@@ -14,6 +14,9 @@ from code_assistant_manager.plugins import (
     BUILTIN_PLUGIN_REPOS,
     VALID_APP_TYPES,
     PluginManager,
+    PluginRepo,
+    fetch_repo_info_from_url,
+    parse_github_url,
 )
 from code_assistant_manager.plugins.claude import ClaudePluginHandler
 
@@ -165,7 +168,7 @@ plugin_app.add_typer(marketplace_app, name="marketplace")
 def install_plugin(
     plugin: str = typer.Argument(
         ...,
-        help="Plugin name or plugin@marketplace",
+        help="Plugin name, plugin@marketplace, or marketplace name",
     ),
     marketplace: Optional[str] = typer.Option(
         None,
@@ -174,26 +177,54 @@ def install_plugin(
         help="Marketplace name (alternative to plugin@marketplace format)",
     ),
 ):
-    """Install a plugin from available marketplaces."""
+    """Install a plugin from available marketplaces or add a built-in marketplace."""
     _check_claude_cli()
     handler = _get_handler()
+    manager = PluginManager()
 
-    # Check if it's a built-in repo that needs marketplace added first
-    builtin = BUILTIN_PLUGIN_REPOS.get(plugin)
-    if builtin and builtin.repo_owner and builtin.repo_name:
-        # Check if marketplace already exists
+    # Check if it's a configured repo (user repos take precedence over builtin)
+    configured_repo = manager.get_repo(plugin)
+    if configured_repo and configured_repo.repo_owner and configured_repo.repo_name:
+        repo_url = f"https://github.com/{configured_repo.repo_owner}/{configured_repo.repo_name}"
+
+        # Handle marketplace type - just add the marketplace
+        if configured_repo.type == "marketplace":
+            typer.echo(f"{Colors.CYAN}Adding marketplace: {plugin}...{Colors.RESET}")
+            success, msg = handler.marketplace_add(repo_url)
+            if success:
+                typer.echo(f"{Colors.GREEN}✓ Marketplace added: {plugin}{Colors.RESET}")
+                typer.echo(
+                    f"\n{Colors.CYAN}Browse plugins with:{Colors.RESET} cam plugin search --marketplace {plugin}"
+                )
+                typer.echo(
+                    f"{Colors.CYAN}Install plugins with:{Colors.RESET} cam plugin install <plugin-name>@{plugin}"
+                )
+            elif "already installed" in msg.lower():
+                typer.echo(
+                    f"{Colors.YELLOW}Marketplace '{plugin}' is already installed.{Colors.RESET}"
+                )
+                typer.echo(
+                    f"\n{Colors.CYAN}Browse plugins with:{Colors.RESET} cam plugin search --marketplace {plugin}"
+                )
+            else:
+                typer.echo(
+                    f"{Colors.RED}✗ Failed to add marketplace: {msg}{Colors.RESET}"
+                )
+                raise typer.Exit(1)
+            return
+
+        # Handle plugin type - add marketplace first if needed, then install plugin
         known_marketplaces = handler.get_known_marketplaces()
         marketplace_exists = any(
-            builtin.repo_owner.lower() in name.lower()
-            or builtin.repo_name.lower() in name.lower()
+            configured_repo.repo_owner.lower() in name.lower()
+            or configured_repo.repo_name.lower() in name.lower()
             for name in known_marketplaces
         )
 
         if not marketplace_exists:
             typer.echo(
-                f"{Colors.CYAN}Adding marketplace for built-in plugin: {plugin}...{Colors.RESET}"
+                f"{Colors.CYAN}Adding marketplace for plugin: {plugin}...{Colors.RESET}"
             )
-            repo_url = f"https://github.com/{builtin.repo_owner}/{builtin.repo_name}"
             success, msg = handler.marketplace_add(repo_url)
             if not success and "already installed" not in msg.lower():
                 typer.echo(
@@ -377,21 +408,32 @@ def list_plugins(
 
 @plugin_app.command("repos")
 def list_repos():
-    """List available built-in plugin repositories."""
-    if not BUILTIN_PLUGIN_REPOS:
+    """List available plugin repositories and marketplaces (built-in + user)."""
+    manager = PluginManager()
+
+    # Get all repos (builtin + user)
+    all_repos = manager.get_all_repos()
+    user_repos = manager.get_user_repos()
+
+    if not all_repos:
+        typer.echo(f"{Colors.YELLOW}No plugin repositories available.{Colors.RESET}")
         typer.echo(
-            f"{Colors.YELLOW}No built-in plugin repositories available.{Colors.RESET}"
+            f"\n{Colors.CYAN}Add a repo with:{Colors.RESET} cam plugin fetch <github-url> --save"
         )
         return
 
-    typer.echo(f"\n{Colors.BOLD}Built-in Plugin Repositories:{Colors.RESET}\n")
-    for name, repo in sorted(BUILTIN_PLUGIN_REPOS.items()):
+    # Separate plugins and marketplaces
+    plugins = {k: v for k, v in all_repos.items() if v.type == "plugin"}
+    marketplaces = {k: v for k, v in all_repos.items() if v.type == "marketplace"}
+
+    def _print_repo(name: str, repo: PluginRepo, is_user: bool = False):
         status = (
             f"{Colors.GREEN}✓{Colors.RESET}"
             if repo.enabled
             else f"{Colors.RED}✗{Colors.RESET}"
         )
-        typer.echo(f"{status} {Colors.BOLD}{name}{Colors.RESET}")
+        user_tag = f" {Colors.YELLOW}(user){Colors.RESET}" if is_user else ""
+        typer.echo(f"{status} {Colors.BOLD}{name}{Colors.RESET}{user_tag}")
         if repo.description:
             typer.echo(f"  {Colors.CYAN}Description:{Colors.RESET} {repo.description}")
         if repo.repo_owner and repo.repo_name:
@@ -400,7 +442,274 @@ def list_repos():
             )
         typer.echo()
 
-    typer.echo(f"{Colors.CYAN}Install with:{Colors.RESET} cam plugin install <name>")
+    if plugins:
+        typer.echo(f"\n{Colors.BOLD}Plugins:{Colors.RESET}\n")
+        for name, repo in sorted(plugins.items()):
+            _print_repo(name, repo, name in user_repos)
+        typer.echo(
+            f"{Colors.CYAN}Install with:{Colors.RESET} cam plugin install <name>"
+        )
+
+    if marketplaces:
+        typer.echo(f"\n{Colors.BOLD}Marketplaces:{Colors.RESET}\n")
+        for name, repo in sorted(marketplaces.items()):
+            _print_repo(name, repo, name in user_repos)
+        typer.echo(
+            f"{Colors.CYAN}Add marketplace with:{Colors.RESET} cam plugin install <marketplace-name>"
+        )
+
+    typer.echo(
+        f"\n{Colors.CYAN}Add new repo:{Colors.RESET} cam plugin fetch <github-url> --save"
+    )
+    typer.echo()
+
+
+@plugin_app.command("browse")
+def browse_marketplace(
+    marketplace: str = typer.Argument(
+        ...,
+        help="Marketplace name to browse (from 'cam plugin repos')",
+    ),
+    query: Optional[str] = typer.Option(
+        None,
+        "--query",
+        "-q",
+        help="Filter plugins by name or description",
+    ),
+    category: Optional[str] = typer.Option(
+        None,
+        "--category",
+        "-c",
+        help="Filter plugins by category",
+    ),
+    limit: int = typer.Option(
+        50,
+        "--limit",
+        "-n",
+        help="Maximum number of plugins to show",
+    ),
+):
+    """Browse plugins in a configured marketplace.
+
+    Fetches the marketplace manifest from GitHub and lists all available plugins.
+    Use --query to search by name/description, --category to filter by category.
+    """
+    manager = PluginManager()
+
+    # Get the marketplace repo config
+    repo = manager.get_repo(marketplace)
+    if not repo:
+        typer.echo(
+            f"{Colors.RED}✗ Marketplace '{marketplace}' not found.{Colors.RESET}"
+        )
+        typer.echo(f"\n{Colors.CYAN}Available repos:{Colors.RESET}")
+        for name in manager.get_all_repos():
+            typer.echo(f"  • {name}")
+        raise typer.Exit(1)
+
+    if repo.type != "marketplace":
+        typer.echo(
+            f"{Colors.RED}✗ '{marketplace}' is a plugin, not a marketplace.{Colors.RESET}"
+        )
+        typer.echo(
+            f"\n{Colors.CYAN}To install:{Colors.RESET} cam plugin install {marketplace}"
+        )
+        raise typer.Exit(1)
+
+    typer.echo(f"{Colors.CYAN}Fetching plugins from {marketplace}...{Colors.RESET}")
+
+    # Fetch marketplace info
+    if not repo.repo_owner or not repo.repo_name:
+        typer.echo(f"{Colors.RED}✗ Marketplace missing repo info.{Colors.RESET}")
+        raise typer.Exit(1)
+
+    from code_assistant_manager.plugins.fetch import fetch_repo_info
+
+    info = fetch_repo_info(repo.repo_owner, repo.repo_name, repo.repo_branch)
+    if not info or not info.plugins:
+        typer.echo(f"{Colors.RED}✗ Could not fetch marketplace plugins.{Colors.RESET}")
+        raise typer.Exit(1)
+
+    # Filter plugins
+    plugins = info.plugins
+    if query:
+        query_lower = query.lower()
+        plugins = [
+            p
+            for p in plugins
+            if query_lower in p.get("name", "").lower()
+            or query_lower in p.get("description", "").lower()
+        ]
+
+    if category:
+        category_lower = category.lower()
+        plugins = [
+            p for p in plugins if category_lower in p.get("category", "").lower()
+        ]
+
+    # Display results
+    total = len(plugins)
+    plugins = plugins[:limit]
+
+    typer.echo(
+        f"\n{Colors.BOLD}{info.name}{Colors.RESET} - {info.description or 'No description'}"
+    )
+    if info.version:
+        typer.echo(f"Version: {info.version}")
+    typer.echo(f"Total plugins: {info.plugin_count}")
+
+    if query or category:
+        typer.echo(f"Matching: {total}")
+
+    typer.echo(f"\n{Colors.BOLD}Plugins:{Colors.RESET}\n")
+
+    # Get unique categories for reference
+    categories = set()
+    for p in info.plugins:
+        if p.get("category"):
+            categories.add(p["category"])
+
+    for p in plugins:
+        name = p.get("name", "unknown")
+        version = p.get("version", "")
+        desc = p.get("description", "")
+        cat = p.get("category", "")
+
+        version_str = f" v{version}" if version else ""
+        cat_str = f" [{cat}]" if cat else ""
+
+        typer.echo(
+            f"  {Colors.BOLD}{name}{Colors.RESET}{version_str}{Colors.CYAN}{cat_str}{Colors.RESET}"
+        )
+        if desc:
+            # Truncate long descriptions
+            if len(desc) > 80:
+                desc = desc[:77] + "..."
+            typer.echo(f"    {desc}")
+
+    if total > limit:
+        typer.echo(f"\n  ... and {total - limit} more")
+
+    # Show categories if available
+    if categories:
+        typer.echo(
+            f"\n{Colors.CYAN}Categories:{Colors.RESET} {', '.join(sorted(categories))}"
+        )
+
+    typer.echo(
+        f"\n{Colors.CYAN}Install with:{Colors.RESET} cam plugin install <plugin-name>@{marketplace}"
+    )
+    typer.echo()
+
+
+@plugin_app.command("fetch")
+def fetch_repo(
+    url: str = typer.Argument(
+        ...,
+        help="GitHub URL or owner/repo (e.g., https://github.com/owner/repo or owner/repo)",
+    ),
+    save: bool = typer.Option(
+        False,
+        "--save",
+        "-s",
+        help="Save the fetched repo to user config",
+    ),
+):
+    """Fetch and detect repo type (plugin or marketplace) from GitHub.
+
+    Analyzes a GitHub repository to determine if it's a single plugin
+    or a marketplace with multiple plugins, then optionally saves it
+    to your local configuration.
+    """
+    typer.echo(f"{Colors.CYAN}Fetching repository info...{Colors.RESET}")
+
+    # Parse and validate URL
+    parsed = parse_github_url(url)
+    if not parsed:
+        typer.echo(f"{Colors.RED}✗ Invalid GitHub URL: {url}{Colors.RESET}")
+        raise typer.Exit(1)
+
+    owner, repo, branch = parsed
+    typer.echo(f"  Repository: {Colors.BOLD}{owner}/{repo}{Colors.RESET}")
+
+    # Fetch repo info
+    info = fetch_repo_info_from_url(url)
+    if not info:
+        typer.echo(
+            f"{Colors.RED}✗ Could not fetch repository info. "
+            f"Make sure the repo has .claude-plugin/marketplace.json{Colors.RESET}"
+        )
+        raise typer.Exit(1)
+
+    # Display results
+    typer.echo(f"\n{Colors.BOLD}Repository Information:{Colors.RESET}\n")
+    typer.echo(f"  {Colors.CYAN}Name:{Colors.RESET} {info.name}")
+    typer.echo(f"  {Colors.CYAN}Type:{Colors.RESET} {info.type}")
+    typer.echo(f"  {Colors.CYAN}Description:{Colors.RESET} {info.description or 'N/A'}")
+    typer.echo(f"  {Colors.CYAN}Branch:{Colors.RESET} {info.branch}")
+
+    if info.version:
+        typer.echo(f"  {Colors.CYAN}Version:{Colors.RESET} {info.version}")
+
+    if info.type == "marketplace":
+        typer.echo(f"  {Colors.CYAN}Plugin Count:{Colors.RESET} {info.plugin_count}")
+        if info.plugins and len(info.plugins) <= 10:
+            typer.echo(f"\n  {Colors.CYAN}Plugins:{Colors.RESET}")
+            for p in info.plugins[:10]:
+                typer.echo(f"    • {p.get('name', 'unknown')}")
+        elif info.plugins:
+            typer.echo(f"\n  {Colors.CYAN}Plugins:{Colors.RESET} (showing first 10)")
+            for p in info.plugins[:10]:
+                typer.echo(f"    • {p.get('name', 'unknown')}")
+            typer.echo(f"    ... and {len(info.plugins) - 10} more")
+    else:
+        if info.plugin_path:
+            typer.echo(f"  {Colors.CYAN}Plugin Path:{Colors.RESET} {info.plugin_path}")
+
+    # Save if requested
+    if save:
+        manager = PluginManager()
+
+        # Check if already exists
+        existing = manager.get_repo(info.name)
+        if existing:
+            typer.echo(
+                f"\n{Colors.YELLOW}Repository '{info.name}' already exists in config.{Colors.RESET}"
+            )
+            if not typer.confirm("Overwrite?"):
+                raise typer.Exit(0)
+
+        # Create PluginRepo and save
+        plugin_repo = PluginRepo(
+            name=info.name,
+            description=info.description,
+            repo_owner=info.owner,
+            repo_name=info.repo,
+            repo_branch=info.branch,
+            plugin_path=info.plugin_path,
+            type=info.type,
+            enabled=True,
+        )
+        manager.add_user_repo(plugin_repo)
+        typer.echo(
+            f"\n{Colors.GREEN}✓ Saved '{info.name}' to user config as {info.type}{Colors.RESET}"
+        )
+        typer.echo(f"  Config file: {manager.plugin_repos_file}")
+
+        # Show next steps
+        if info.type == "marketplace":
+            typer.echo(
+                f"\n{Colors.CYAN}Next:{Colors.RESET} cam plugin install {info.name}"
+            )
+        else:
+            typer.echo(
+                f"\n{Colors.CYAN}Next:{Colors.RESET} cam plugin install {info.name}"
+            )
+    else:
+        typer.echo(
+            f"\n{Colors.CYAN}To save:{Colors.RESET} cam plugin fetch '{url}' --save"
+        )
+
     typer.echo()
 
 

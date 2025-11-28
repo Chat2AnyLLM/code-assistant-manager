@@ -136,7 +136,7 @@ class Marketplace:
 
 @dataclass
 class PluginRepo:
-    """Represents a pre-registered plugin repository."""
+    """Represents a pre-registered plugin repository or marketplace."""
 
     name: str
     description: str = ""
@@ -145,6 +145,7 @@ class PluginRepo:
     repo_branch: str = "main"
     plugin_path: Optional[str] = None
     enabled: bool = True
+    type: str = "plugin"  # "plugin" or "marketplace"
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
@@ -152,6 +153,7 @@ class PluginRepo:
             "name": self.name,
             "description": self.description,
             "enabled": self.enabled,
+            "type": self.type,
         }
         if self.repo_owner:
             data["repoOwner"] = self.repo_owner

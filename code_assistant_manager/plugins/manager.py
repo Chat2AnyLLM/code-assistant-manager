@@ -31,6 +31,7 @@ def _load_builtin_plugin_repos() -> Dict[str, PluginRepo]:
                     repo_branch=repo_data.get("repoBranch", "main"),
                     plugin_path=repo_data.get("pluginPath"),
                     enabled=repo_data.get("enabled", True),
+                    type=repo_data.get("type", "plugin"),
                 )
             logger.debug(f"Loaded {len(repos)} builtin plugin repos")
         except Exception as e:
@@ -89,6 +90,7 @@ class PluginManager:
         self.config_dir = Path(config_dir)
         self.plugins_file = self.config_dir / "plugins.json"
         self.marketplaces_file = self.config_dir / "marketplaces.json"
+        self.plugin_repos_file = self.config_dir / "plugin_repos.json"
         self.config_dir.mkdir(parents=True, exist_ok=True)
 
         # Initialize handlers with optional overrides
@@ -234,6 +236,80 @@ class PluginManager:
     def get_builtin_repo(self, name: str) -> Optional[PluginRepo]:
         """Get a built-in plugin repository by name."""
         return BUILTIN_PLUGIN_REPOS.get(name)
+
+    # ==================== User Plugin Repos ====================
+
+    def _load_user_repos(self) -> Dict[str, PluginRepo]:
+        """Load user-configured plugin repos from config file."""
+        if not self.plugin_repos_file.exists():
+            return {}
+
+        try:
+            with open(self.plugin_repos_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            repos: Dict[str, PluginRepo] = {}
+            for key, repo_data in data.items():
+                repos[key] = PluginRepo(
+                    name=repo_data.get("name", key),
+                    description=repo_data.get("description", ""),
+                    repo_owner=repo_data.get("repoOwner"),
+                    repo_name=repo_data.get("repoName"),
+                    repo_branch=repo_data.get("repoBranch", "main"),
+                    plugin_path=repo_data.get("pluginPath"),
+                    enabled=repo_data.get("enabled", True),
+                    type=repo_data.get("type", "plugin"),
+                )
+            return repos
+        except Exception as e:
+            logger.warning(f"Failed to load user plugin repos: {e}")
+            return {}
+
+    def _save_user_repos(self, repos: Dict[str, PluginRepo]) -> None:
+        """Save user plugin repos to config file."""
+        data = {key: repo.to_dict() for key, repo in repos.items()}
+        with open(self.plugin_repos_file, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+
+    def get_user_repos(self) -> Dict[str, PluginRepo]:
+        """Get all user-configured plugin repositories."""
+        return self._load_user_repos()
+
+    def get_user_repo(self, name: str) -> Optional[PluginRepo]:
+        """Get a user plugin repository by name."""
+        repos = self._load_user_repos()
+        return repos.get(name)
+
+    def add_user_repo(self, repo: PluginRepo) -> None:
+        """Add or update a user plugin repository."""
+        repos = self._load_user_repos()
+        repos[repo.name] = repo
+        self._save_user_repos(repos)
+        logger.info(f"Added/updated user repo: {repo.name}")
+
+    def remove_user_repo(self, name: str) -> bool:
+        """Remove a user plugin repository."""
+        repos = self._load_user_repos()
+        if name not in repos:
+            return False
+        del repos[name]
+        self._save_user_repos(repos)
+        logger.info(f"Removed user repo: {name}")
+        return True
+
+    def get_all_repos(self) -> Dict[str, PluginRepo]:
+        """Get all plugin repos (builtin + user), user repos override builtin."""
+        repos = self.get_builtin_repos()
+        repos.update(self._load_user_repos())
+        return repos
+
+    def get_repo(self, name: str) -> Optional[PluginRepo]:
+        """Get a plugin repo by name (user repos take precedence)."""
+        # Check user repos first
+        user_repo = self.get_user_repo(name)
+        if user_repo:
+            return user_repo
+        # Fall back to builtin
+        return self.get_builtin_repo(name)
 
     # ==================== Installation Operations ====================
 

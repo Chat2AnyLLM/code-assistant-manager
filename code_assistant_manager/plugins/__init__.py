@@ -8,6 +8,12 @@ Plugins are installed from GitHub repositories or local directories.
 
 from .base import BasePluginHandler
 from .claude import ClaudePluginHandler
+from .fetch import (
+    FetchedRepoInfo,
+    fetch_repo_info,
+    fetch_repo_info_from_url,
+    parse_github_url,
+)
 from .manager import (
     BUILTIN_PLUGIN_REPOS,
     PLUGIN_HANDLERS,
@@ -29,6 +35,11 @@ __all__ = [
     # Manager
     "PluginManager",
     "get_handler",
+    # Fetch utilities
+    "FetchedRepoInfo",
+    "fetch_repo_info",
+    "fetch_repo_info_from_url",
+    "parse_github_url",
     # Constants
     "PLUGIN_HANDLERS",
     "VALID_APP_TYPES",

@@ -268,23 +268,29 @@ class ClaudePluginHandler(BasePluginHandler):
             if not plugins_dir.exists():
                 continue
 
-            for plugin_dir in plugins_dir.iterdir():
-                if not plugin_dir.is_dir():
-                    continue
+            # Recursively find all plugin directories (they contain .claude-plugin/)
+            def scan_dir(directory: Path):
+                for item in directory.iterdir():
+                    if not item.is_dir():
+                        continue
 
-                valid, manifest = self.validate_plugin_structure(plugin_dir)
-                if not valid or manifest is None:
-                    continue
+                    # Check if this directory is a plugin
+                    valid, manifest = self.validate_plugin_structure(item)
+                    if valid and manifest is not None:
+                        plugin = Plugin(
+                            name=manifest[self.manifest_name_field],
+                            version=manifest.get("version", "1.0.0"),
+                            description=manifest.get("description", ""),
+                            marketplace=marketplace_name,
+                            local_path=str(item),
+                            installed=False,
+                        )
+                        plugins.append(plugin)
+                    else:
+                        # Not a plugin, might be a category directory - scan deeper
+                        scan_dir(item)
 
-                plugin = Plugin(
-                    name=manifest[self.manifest_name_field],
-                    version=manifest.get("version", "1.0.0"),
-                    description=manifest.get("description", ""),
-                    marketplace=marketplace_name,
-                    local_path=str(plugin_dir),
-                    installed=False,  # Will be updated by checking enabled plugins
-                )
-                plugins.append(plugin)
+            scan_dir(plugins_dir)
 
         # Check which plugins are enabled
         enabled = self.get_enabled_plugins()
