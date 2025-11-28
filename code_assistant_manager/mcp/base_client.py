@@ -1,10 +1,130 @@
 """Base MCP client class with common functionality."""
 
+import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Dict, List
+from typing import Any, Dict, List, Optional, Tuple
 
 from .base import MCPBase, print_squared_frame
+
+# ============================================================================
+# Config File Handling Helpers
+# ============================================================================
+
+# Common MCP server config key names in different config formats
+MCP_SERVER_KEYS = ["mcpServers", "servers", "mcp_servers"]
+
+
+def _load_config_file(config_path: Path) -> Tuple[Optional[dict], bool]:
+    """
+    Load a config file (JSON or TOML).
+
+    Returns:
+        Tuple of (config_dict or None, is_toml)
+    """
+    is_toml = config_path.suffix == ".toml"
+
+    if not config_path.exists():
+        return {}, is_toml
+
+    try:
+        if is_toml:
+            import tomllib
+
+            with open(config_path, "rb") as f:
+                return tomllib.load(f), is_toml
+        else:
+            with open(config_path, "r") as f:
+                return json.load(f), is_toml
+    except Exception:
+        return None, is_toml
+
+
+def _save_config_file(config_path: Path, config: dict, is_toml: bool) -> bool:
+    """Save a config dict to file (JSON or TOML)."""
+    try:
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        if is_toml:
+            import tomli_w
+
+            with open(config_path, "wb") as f:
+                tomli_w.dump(config, f)
+        else:
+            with open(config_path, "w") as f:
+                json.dump(config, f, indent=2)
+        return True
+    except Exception:
+        return False
+
+
+def _find_server_container(
+    config: dict, server_name: str
+) -> Optional[Tuple[str, dict]]:
+    """
+    Find which container (mcpServers, servers, etc.) holds a server.
+
+    Returns:
+        Tuple of (container_key, container_dict) or None if not found
+    """
+    for key in MCP_SERVER_KEYS:
+        if key in config and isinstance(config[key], dict):
+            if server_name in config[key]:
+                return key, config[key]
+
+    # Check direct entry
+    if server_name in config and isinstance(config[server_name], dict):
+        return None, config  # None key means direct entry
+
+    return None
+
+
+def _server_exists_in_config(config: dict, server_name: str) -> bool:
+    """Check if a server already exists in any config structure."""
+    for key in MCP_SERVER_KEYS:
+        if key in config and isinstance(config[key], dict):
+            if server_name in config[key]:
+                return True
+
+    # Check direct entry
+    if server_name in config and isinstance(config[server_name], dict):
+        return True
+
+    return False
+
+
+def _get_preferred_container_key(config: dict, is_toml: bool) -> str:
+    """Get the preferred container key for adding new servers."""
+    # Prefer existing containers
+    for key in MCP_SERVER_KEYS:
+        if key in config and isinstance(config[key], dict):
+            return key
+
+    # Default based on file type
+    return "mcp_servers" if is_toml else "mcpServers"
+
+
+def _remove_server_from_containers(config: dict, server_name: str) -> bool:
+    """
+    Remove a server from all containers in a config dict.
+
+    Returns:
+        True if any server was removed, False otherwise
+    """
+    modified = False
+
+    # Check all MCP server container keys
+    for key in MCP_SERVER_KEYS:
+        if key in config and isinstance(config[key], dict):
+            if server_name in config[key]:
+                del config[key][server_name]
+                modified = True
+
+    # Check for direct server entry
+    if server_name in config and isinstance(config[server_name], dict):
+        del config[server_name]
+        modified = True
+
+    return modified
 
 
 class MCPClient(MCPBase):
@@ -947,99 +1067,27 @@ class MCPClient(MCPBase):
         self, config_path: Path, server_name: str, server_info: dict
     ) -> bool:
         """Add a server to a specific MCP config file."""
-        import json
-
         try:
-            # Load existing config if it exists
-            config = {}
-            config_loaded = False
-            is_toml = config_path.suffix == ".toml"
-
-            if config_path.exists():
-                try:
-                    if is_toml:
-                        import tomllib
-
-                        with open(config_path, "rb") as f:
-                            config = tomllib.load(f)
-                    else:
-                        with open(config_path, "r") as f:
-                            config = json.load(f)
-                    config_loaded = True
-                except Exception:
-                    # If file exists but is invalid, can't safely modify
-                    return False
-
-            # Check if server already exists in any structure
-            server_exists = False
-            if "mcpServers" in config and isinstance(config["mcpServers"], dict):
-                if server_name in config["mcpServers"]:
-                    server_exists = True
-            if "servers" in config and isinstance(config["servers"], dict):
-                if server_name in config["servers"]:
-                    server_exists = True
-            if "mcp_servers" in config and isinstance(config["mcp_servers"], dict):
-                if server_name in config["mcp_servers"]:
-                    server_exists = True
-            if server_name in config and isinstance(config[server_name], dict):
-                server_exists = True
-
-            # If server already exists, don't add it
-            if server_exists:
+            # Load existing config
+            config, is_toml = _load_config_file(config_path)
+            if config is None:
+                # File exists but is invalid, can't safely modify
                 return False
 
-            # MCP configs can have different structures
-            # Common structures:
-            # 1. { "mcpServers": { "server_name": {...} } }
-            # 2. { "servers": { "server_name": {...} } }
-            # 3. { "mcp_servers": { "server_name": {...} } }
-            # 4. Direct { "server_name": {...} }
+            # Check if server already exists
+            if _server_exists_in_config(config, server_name):
+                return False
 
-            modified = False
+            # Find or create the appropriate container
+            container_key = _get_preferred_container_key(config, is_toml)
+            if container_key not in config:
+                config[container_key] = {}
 
-            # Prefer existing structures, or add to mcpServers/mcp_servers if none exist
-            if "mcpServers" in config and isinstance(config["mcpServers"], dict):
-                if server_name not in config["mcpServers"]:
-                    config["mcpServers"][server_name] = server_info
-                    modified = True
-            elif "servers" in config and isinstance(config["servers"], dict):
-                if server_name not in config["servers"]:
-                    config["servers"][server_name] = server_info
-                    modified = True
-            elif "mcp_servers" in config and isinstance(config["mcp_servers"], dict):
-                if server_name not in config["mcp_servers"]:
-                    config["mcp_servers"][server_name] = server_info
-                    modified = True
-            elif isinstance(config.get(server_name), dict):
-                # Server exists as direct entry, don't overwrite
-                pass
-            else:
-                # No existing structure, add to mcpServers or mcp_servers
-                if is_toml:
-                    if "mcp_servers" not in config:
-                        config["mcp_servers"] = {}
-                    if server_name not in config["mcp_servers"]:
-                        config["mcp_servers"][server_name] = server_info
-                        modified = True
-                else:
-                    if "mcpServers" not in config:
-                        config["mcpServers"] = {}
-                    if server_name not in config["mcpServers"]:
-                        config["mcpServers"][server_name] = server_info
-                        modified = True
+            # Add the server
+            config[container_key][server_name] = server_info
 
-            # If modified, write back the config
-            if modified:
-                # Ensure parent directory exists
-                config_path.parent.mkdir(parents=True, exist_ok=True)
-                if is_toml:
-                    import tomli_w
-
-                    with open(config_path, "wb") as f:
-                        tomli_w.dump(config, f)
-                else:
-                    with open(config_path, "w") as f:
-                        json.dump(config, f, indent=2)
+            # Save and return
+            if _save_config_file(config_path, config, is_toml):
                 return True
 
         except Exception as e:
@@ -1120,70 +1168,20 @@ class MCPClient(MCPBase):
 
     def _remove_server_from_config(self, config_path: Path, server_name: str) -> bool:
         """Remove a server from a specific MCP config file."""
-
         if not config_path.exists():
             return False
 
-        is_toml = config_path.suffix == ".toml"
-
         try:
-            # Read the config file
-            if is_toml:
-                import tomllib
+            config, is_toml = _load_config_file(config_path)
+            if config is None:
+                return False
 
-                with open(config_path, "rb") as f:
-                    config = tomllib.load(f)
-            else:
-                import json
-
-                with open(config_path, "r") as f:
-                    config = json.load(f)
-
-            # MCP configs can have different structures
-            # Common structures:
-            # 1. { "mcpServers": { "server_name": {...} } }
-            # 2. { "servers": { "server_name": {...} } }
-            # 3. { "mcp_servers": { "server_name": {...} } }
-            # 4. Direct { "server_name": {...} }
-
-            modified = False
-
-            # Check for mcpServers structure
-            if "mcpServers" in config and isinstance(config["mcpServers"], dict):
-                if server_name in config["mcpServers"]:
-                    del config["mcpServers"][server_name]
-                    modified = True
-
-            # Check for servers structure
-            if "servers" in config and isinstance(config["servers"], dict):
-                if server_name in config["servers"]:
-                    del config["servers"][server_name]
-                    modified = True
-
-            # Check for mcp_servers structure
-            if "mcp_servers" in config and isinstance(config["mcp_servers"], dict):
-                if server_name in config["mcp_servers"]:
-                    del config["mcp_servers"][server_name]
-                    modified = True
-
-            # Check for direct server entries
-            if server_name in config and isinstance(config[server_name], dict):
-                del config[server_name]
-                modified = True
-
-            # If modified, write back the config
-            if modified:
-                if is_toml:
-                    import tomli_w
-
-                    with open(config_path, "wb") as f:
-                        tomli_w.dump(config, f)
-                else:
-                    with open(config_path, "w") as f:
-                        json.dump(config, f, indent=2)
-                return True
+            if _remove_server_from_containers(config, server_name):
+                return _save_config_file(config_path, config, is_toml)
 
         except Exception as e:
-            print(f"  Warning: Failed to process {config_path}: {e}")
+            print(
+                f"  Warning: Failed to process {config_path}: {type(e).__name__}: {e}"
+            )
 
         return False

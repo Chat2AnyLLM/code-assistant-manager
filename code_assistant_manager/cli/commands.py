@@ -4,9 +4,10 @@ import logging
 import shutil
 import subprocess
 import sys
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Dict, List, Optional
 
 import typer
 from typer import Context
@@ -35,6 +36,231 @@ from code_assistant_manager.tools import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+# ============================================================================
+# Uninstall Helper Classes and Functions
+# ============================================================================
+
+
+@dataclass
+class UninstallContext:
+    """Context for uninstall operation."""
+
+    tools_to_uninstall: List[str]
+    installed_tools: List[str]
+    config_dirs: Dict[str, Path]
+    tools_with_config: List[str]
+    keep_config: bool
+    force: bool
+
+
+# Tool configuration directories mapping
+TOOL_CONFIG_DIRS: Dict[str, Path] = {
+    "claude": Path.home() / ".claude",
+    "crush": Path.home() / ".config" / "crush",
+    "codex": Path.home() / ".codex",
+    "gemini": Path.home() / ".gemini",
+    "codebuddy": Path.home() / ".codebuddy",
+    "droid": Path.home() / ".droid",
+    "iflow": Path.home() / ".iflow",
+    "neovate": Path.home() / ".neovate",
+    "qodercli": Path.home() / ".qodercli",
+    "qwen": Path.home() / ".qwen",
+    "zed": Path.home() / ".zed",
+    "copilot": Path.home() / ".copilot",
+    "cursor-agent": Path.home() / ".cursor-agent",
+}
+
+# NPM package name mapping
+NPM_PACKAGE_MAP: Dict[str, str] = {
+    "claude": "@anthropic-ai/claude-code",
+    "crush": "@charmland/crush",
+    "codex": "@openai/codex",
+    "gemini": "@google/genai",
+    "qwen": "@qwen-code/qwen-code",
+    "codebuddy": "@tencent-ai/codebuddy-code",
+    "droid": "@factory-ai/droid",
+    "iflow": "@iflytek/iflow",
+    "neovate": "@neovate/cli",
+    "qodercli": "@qoder/qodercli",
+    "copilot": "@githubnext/copilot-cli",
+    "cursor-agent": "@cursor/agent",
+    "zed": "zed",
+}
+
+
+def _get_config_manager(ctx: Context) -> ConfigManager:
+    """Get or create ConfigManager from context."""
+    try:
+        config_path = None
+        if ctx and ctx.obj and hasattr(ctx.obj, "get"):
+            config_path = ctx.obj.get("config_path")
+        return ConfigManager(config_path) if config_path else ConfigManager()
+    except Exception:
+        return ConfigManager()
+
+
+def _get_installed_tools(
+    target: str, config: ConfigManager
+) -> tuple[List[str], Optional[int]]:
+    """Get list of installed tools based on target.
+
+    Returns:
+        Tuple of (installed_tools, error_code or None)
+    """
+    upgradeable_tools = get_registered_tools()
+
+    # Validate target
+    if target != "all" and target not in upgradeable_tools:
+        typer.echo(f"{Colors.RED}Error: Unknown tool {target!r}{Colors.RESET}")
+        return [], 1
+
+    # Determine which tools to check
+    tools_to_check = [target] if target != "all" else list(upgradeable_tools.keys())
+
+    # Filter to only installed tools
+    installed_tools = []
+    for tool_name in tools_to_check:
+        try:
+            tool = upgradeable_tools[tool_name](config)
+            if tool._check_command_available(tool.command_name):
+                installed_tools.append(tool_name)
+        except Exception:
+            pass
+
+    return installed_tools, None
+
+
+def _display_uninstall_plan(ctx: UninstallContext) -> None:
+    """Display what will be uninstalled."""
+    typer.echo(f"\n{Colors.BOLD}Tools to uninstall:{Colors.RESET}")
+    for tool_name in ctx.installed_tools:
+        typer.echo(f"  • {tool_name}")
+
+    if ctx.tools_with_config and not ctx.keep_config:
+        typer.echo(f"\n{Colors.BOLD}Configuration directories to backup:{Colors.RESET}")
+        for tool in ctx.tools_with_config:
+            config_dir = ctx.config_dirs.get(tool)
+            typer.echo(f"  • {config_dir}")
+
+
+def _confirm_uninstall(ctx: UninstallContext) -> bool:
+    """Prompt for confirmation if not forced."""
+    if ctx.force:
+        return True
+
+    if ctx.tools_with_config and not ctx.keep_config:
+        typer.echo(
+            f"\n{Colors.YELLOW}⚠️  Configuration files will be backed up{Colors.RESET}"
+        )
+    else:
+        typer.echo(
+            f"\n{Colors.YELLOW}⚠️  Configuration files will be deleted{Colors.RESET}"
+        )
+
+    return typer.confirm(
+        f"Continue with uninstalling {len(ctx.installed_tools)} tool(s)?"
+    )
+
+
+def _backup_configs(ctx: UninstallContext) -> Optional[Path]:
+    """Backup configuration directories.
+
+    Returns:
+        Backup directory path or None if no backup was made
+    """
+    if not ctx.tools_with_config or ctx.keep_config:
+        return None
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_dir = (
+        Path.home() / f".config/code-assistant-manager/backup/uninstall_{timestamp}"
+    )
+    backup_dir.mkdir(parents=True, exist_ok=True)
+
+    typer.echo(f"\n{Colors.BOLD}Backing up configuration files...{Colors.RESET}")
+    for tool in ctx.tools_with_config:
+        config_dir = ctx.config_dirs.get(tool)
+        try:
+            backup_path = backup_dir / tool
+            shutil.copytree(config_dir, backup_path)
+            typer.echo(
+                f"  {Colors.GREEN}✓{Colors.RESET} {tool}: {config_dir} → {backup_path}"
+            )
+        except Exception as e:
+            typer.echo(f"  {Colors.RED}✗{Colors.RESET} {tool}: Failed to backup - {e}")
+
+    return backup_dir
+
+
+def _uninstall_tools(installed_tools: List[str]) -> List[str]:
+    """Uninstall tools using npm.
+
+    Returns:
+        List of failed tool names
+    """
+    typer.echo(f"\n{Colors.BOLD}Uninstalling tools...{Colors.RESET}")
+    failed_uninstalls = []
+
+    for tool_name in installed_tools:
+        try:
+            npm_package = NPM_PACKAGE_MAP.get(tool_name, tool_name)
+            uninstall_cmd = f"npm uninstall -g {npm_package}"
+
+            result = subprocess.run(
+                uninstall_cmd, shell=True, capture_output=True, text=True
+            )
+
+            if result.returncode == 0:
+                typer.echo(f"  {Colors.GREEN}✓{Colors.RESET} {tool_name}")
+            else:
+                typer.echo(
+                    f"  {Colors.RED}✗{Colors.RESET} {tool_name}: {result.stderr.strip()}"
+                )
+                failed_uninstalls.append(tool_name)
+        except Exception as e:
+            typer.echo(f"  {Colors.RED}✗{Colors.RESET} {tool_name}: {e}")
+            failed_uninstalls.append(tool_name)
+
+    return failed_uninstalls
+
+
+def _remove_configs(ctx: UninstallContext) -> None:
+    """Remove configuration directories."""
+    if ctx.keep_config:
+        return
+
+    typer.echo(f"\n{Colors.BOLD}Removing configuration files...{Colors.RESET}")
+    for tool in ctx.tools_with_config:
+        config_dir = ctx.config_dirs.get(tool)
+        try:
+            shutil.rmtree(config_dir)
+            typer.echo(f"  {Colors.GREEN}✓{Colors.RESET} {tool}: {config_dir}")
+        except Exception as e:
+            typer.echo(f"  {Colors.YELLOW}⚠️  {tool}: {e}{Colors.RESET}")
+
+
+def _display_summary(
+    installed_tools: List[str],
+    failed_uninstalls: List[str],
+    backup_dir: Optional[Path],
+) -> int:
+    """Display uninstall summary and return exit code."""
+    successful_uninstalls = len(installed_tools) - len(failed_uninstalls)
+    typer.echo(f"\n{Colors.BOLD}Uninstall Summary:{Colors.RESET}")
+    typer.echo(f"  Successful: {successful_uninstalls}/{len(installed_tools)}")
+
+    if backup_dir:
+        typer.echo(f"  Backup location: {backup_dir}")
+
+    if failed_uninstalls:
+        typer.echo(
+            f"  {Colors.RED}Failed:{Colors.RESET} {', '.join(failed_uninstalls)}"
+        )
+        return 1
+
+    return 0
 
 
 def upgrade(
@@ -351,184 +577,44 @@ def uninstall(
     keep_config: bool = KEEP_CONFIG_OPTION,
 ):
     """Uninstall CLI tools and backup their configuration files."""
-    # Get config - try to get from context, otherwise create new
-    try:
-        config_path = None
-        if ctx and ctx.obj and hasattr(ctx.obj, "get"):
-            config_path = ctx.obj.get("config_path")
-        config = ConfigManager(config_path) if config_path else ConfigManager()
-    except Exception:
-        # If config initialization fails, create a new one without path
-        config = ConfigManager()
+    config = _get_config_manager(ctx)
 
-    upgradeable_tools = get_registered_tools()
-
-    # Validate target
-    if target != "all" and target not in upgradeable_tools:
-        typer.echo(f"{Colors.RED}Error: Unknown tool {target!r}{Colors.RESET}")
-        return 1
-
-    # Determine which tools to uninstall
-    tools_to_uninstall = [target] if target != "all" else list(upgradeable_tools.keys())
-
-    # Filter to only installed tools
-    installed_tools = []
-    for tool_name in tools_to_uninstall:
-        try:
-            tool = upgradeable_tools[tool_name](config)
-            # Check if tool is installed
-            if tool._check_command_available(tool.command_name):
-                installed_tools.append(tool_name)
-        except Exception:
-            pass
+    # Get installed tools
+    installed_tools, error_code = _get_installed_tools(target, config)
+    if error_code is not None:
+        return error_code
 
     if not installed_tools:
         typer.echo(f"{Colors.YELLOW}No tools found to uninstall{Colors.RESET}")
         return 0
 
-    # Display what will be uninstalled
-    typer.echo(f"\n{Colors.BOLD}Tools to uninstall:{Colors.RESET}")
-    for tool_name in installed_tools:
-        typer.echo(f"  • {tool_name}")
-
-    # Get config directories for backup
-    config_dirs = {
-        "claude": Path.home() / ".claude",
-        "crush": Path.home() / ".config" / "crush",
-        "codex": Path.home() / ".codex",
-        "gemini": Path.home() / ".gemini",
-        "codebuddy": Path.home() / ".codebuddy",
-        "droid": Path.home() / ".droid",
-        "iflow": Path.home() / ".iflow",
-        "neovate": Path.home() / ".neovate",
-        "qodercli": Path.home() / ".qodercli",
-        "qwen": Path.home() / ".qwen",
-        "zed": Path.home() / ".zed",
-        "copilot": Path.home() / ".copilot",
-        "cursor-agent": Path.home() / ".cursor-agent",
-    }
-
-    # Check which tools have config directories
+    # Build uninstall context
     tools_with_config = [
-        tool for tool in installed_tools if config_dirs.get(tool, Path()).exists()
+        tool for tool in installed_tools if TOOL_CONFIG_DIRS.get(tool, Path()).exists()
     ]
 
-    if tools_with_config and not keep_config:
-        typer.echo(f"\n{Colors.BOLD}Configuration directories to backup:{Colors.RESET}")
-        for tool in tools_with_config:
-            config_dir = config_dirs.get(tool)
-            typer.echo(f"  • {config_dir}")
+    uninstall_ctx = UninstallContext(
+        tools_to_uninstall=[target] if target != "all" else installed_tools,
+        installed_tools=installed_tools,
+        config_dirs=TOOL_CONFIG_DIRS,
+        tools_with_config=tools_with_config,
+        keep_config=keep_config,
+        force=force,
+    )
 
-    # Confirmation
-    if not force:
-        if tools_with_config and not keep_config:
-            typer.echo(
-                f"\n{Colors.YELLOW}⚠️  Configuration files will be backed up{Colors.RESET}"
-            )
-        else:
-            typer.echo(
-                f"\n{Colors.YELLOW}⚠️  Configuration files will be deleted{Colors.RESET}"
-            )
+    # Display plan and confirm
+    _display_uninstall_plan(uninstall_ctx)
 
-        proceed = typer.confirm(
-            f"Continue with uninstalling {len(installed_tools)} tool(s)?"
-        )
-        if not proceed:
-            typer.echo("Uninstall cancelled")
-            return 0
+    if not _confirm_uninstall(uninstall_ctx):
+        typer.echo("Uninstall cancelled")
+        return 0
 
-    # Backup configuration files
-    backup_dir = None
-    if tools_with_config and not keep_config:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        backup_dir = (
-            Path.home() / f".config/code-assistant-manager/backup/uninstall_{timestamp}"
-        )
-        backup_dir.mkdir(parents=True, exist_ok=True)
+    # Execute uninstall
+    backup_dir = _backup_configs(uninstall_ctx)
+    failed_uninstalls = _uninstall_tools(installed_tools)
+    _remove_configs(uninstall_ctx)
 
-        typer.echo(f"\n{Colors.BOLD}Backing up configuration files...{Colors.RESET}")
-        for tool in tools_with_config:
-            config_dir = config_dirs.get(tool)
-            try:
-                backup_path = backup_dir / tool
-                shutil.copytree(config_dir, backup_path)
-                typer.echo(
-                    f"  {Colors.GREEN}✓{Colors.RESET} {tool}: {config_dir} → {backup_path}"
-                )
-            except Exception as e:
-                typer.echo(
-                    f"  {Colors.RED}✗{Colors.RESET} {tool}: Failed to backup - {e}"
-                )
-
-    # Uninstall tools using npm
-    # Mapping of tool names to npm package names
-    npm_package_map = {
-        "claude": "@anthropic-ai/claude-code",
-        "crush": "@charmland/crush",
-        "codex": "@openai/codex",
-        "gemini": "@google/genai",
-        "qwen": "@qwen-code/qwen-code",
-        "codebuddy": "@tencent-ai/codebuddy-code",
-        "droid": "@factory-ai/droid",
-        "iflow": "@iflytek/iflow",
-        "neovate": "@neovate/cli",
-        "qodercli": "@qoder/qodercli",
-        "copilot": "@githubnext/copilot-cli",
-        "cursor-agent": "@cursor/agent",
-        "zed": "zed",
-    }
-
-    typer.echo(f"\n{Colors.BOLD}Uninstalling tools...{Colors.RESET}")
-    failed_uninstalls = []
-
-    for tool_name in installed_tools:
-        try:
-            # Get the actual npm package name
-            npm_package = npm_package_map.get(tool_name, tool_name)
-            uninstall_cmd = f"npm uninstall -g {npm_package}"
-
-            # Execute uninstall
-            result = subprocess.run(
-                uninstall_cmd, shell=True, capture_output=True, text=True
-            )
-
-            if result.returncode == 0:
-                typer.echo(f"  {Colors.GREEN}✓{Colors.RESET} {tool_name}")
-            else:
-                typer.echo(
-                    f"  {Colors.RED}✗{Colors.RESET} {tool_name}: {result.stderr.strip()}"
-                )
-                failed_uninstalls.append(tool_name)
-        except Exception as e:
-            typer.echo(f"  {Colors.RED}✗{Colors.RESET} {tool_name}: {e}")
-            failed_uninstalls.append(tool_name)
-
-    # Delete configuration directories after successful uninstall
-    if not keep_config:
-        typer.echo(f"\n{Colors.BOLD}Removing configuration files...{Colors.RESET}")
-        for tool in tools_with_config:
-            config_dir = config_dirs.get(tool)
-            try:
-                shutil.rmtree(config_dir)
-                typer.echo(f"  {Colors.GREEN}✓{Colors.RESET} {tool}: {config_dir}")
-            except Exception as e:
-                typer.echo(f"  {Colors.YELLOW}⚠️  {tool}: {e}{Colors.RESET}")
-
-    # Summary
-    successful_uninstalls = len(installed_tools) - len(failed_uninstalls)
-    typer.echo(f"\n{Colors.BOLD}Uninstall Summary:{Colors.RESET}")
-    typer.echo(f"  Successful: {successful_uninstalls}/{len(installed_tools)}")
-
-    if backup_dir:
-        typer.echo(f"  Backup location: {backup_dir}")
-
-    if failed_uninstalls:
-        typer.echo(
-            f"  {Colors.RED}Failed:{Colors.RESET} {', '.join(failed_uninstalls)}"
-        )
-        return 1
-
-    return 0
+    return _display_summary(installed_tools, failed_uninstalls, backup_dir)
 
 
 @app.command("un", hidden=True)

@@ -14,7 +14,16 @@ import sys
 import tempfile
 from pathlib import Path
 
-import pexpect
+import pytest
+
+try:
+    import pexpect
+except ImportError:
+    pexpect = None
+
+pytestmark = pytest.mark.skipif(
+    pexpect is None, reason="pexpect is required for interactive tests"
+)
 
 # Add the project root to the Python path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
