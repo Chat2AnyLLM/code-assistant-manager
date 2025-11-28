@@ -228,3 +228,332 @@ def test_sync_default_prompt(cli_manager, tmp_path, monkeypatch):
     stored = cli_manager.get("test")
     assert stored.is_default is True
     assert any("synced" in msg.lower() for msg in outputs)
+
+
+# Additional tests for uncovered functions
+
+
+def test_list_prompts_empty(cli_manager, monkeypatch):
+    """list_prompts shows message when no prompts exist."""
+    outputs = []
+    monkeypatch.setattr(
+        prompts_commands.typer, "echo", lambda msg="": outputs.append(str(msg))
+    )
+
+    prompts_commands.list_prompts()
+
+    combined = "\n".join(outputs)
+    assert "No prompts found" in combined
+
+
+def test_list_prompts_with_prompts(cli_manager, monkeypatch):
+    """list_prompts shows all prompts with their status."""
+    prompt1 = Prompt(id="p1", name="Prompt One", content="content 1")
+    prompt2 = Prompt(
+        id="p2", name="Prompt Two", content="content 2", description="A description"
+    )
+    cli_manager.create(prompt1)
+    cli_manager.create(prompt2)
+    cli_manager.set_default("p1")
+
+    outputs = []
+    monkeypatch.setattr(
+        prompts_commands.typer, "echo", lambda msg="": outputs.append(str(msg))
+    )
+
+    prompts_commands.list_prompts()
+
+    combined = "\n".join(outputs)
+    assert "Prompt One" in combined
+    assert "Prompt Two" in combined
+    assert "default" in combined
+    assert "p1" in combined
+    assert "p2" in combined
+    assert "A description" in combined
+
+
+def test_view_prompt_success(cli_manager, monkeypatch):
+    """view_prompt displays prompt content."""
+    prompt = Prompt(
+        id="test",
+        name="Test Prompt",
+        content="This is the content",
+        description="A test description",
+    )
+    cli_manager.create(prompt)
+
+    outputs = []
+    monkeypatch.setattr(
+        prompts_commands.typer, "echo", lambda msg="": outputs.append(str(msg))
+    )
+
+    prompts_commands.view_prompt("test")
+
+    combined = "\n".join(outputs)
+    assert "Test Prompt" in combined
+    assert "This is the content" in combined
+    assert "A test description" in combined
+
+
+def test_view_prompt_not_found(cli_manager, monkeypatch):
+    """view_prompt raises exit when prompt not found."""
+    outputs = []
+    monkeypatch.setattr(
+        prompts_commands.typer, "echo", lambda msg="": outputs.append(str(msg))
+    )
+
+    with pytest.raises(prompts_commands.typer.Exit):
+        prompts_commands.view_prompt("nonexistent")
+
+    combined = "\n".join(outputs)
+    assert "not found" in combined
+
+
+def test_create_prompt_from_file(cli_manager, tmp_path, monkeypatch):
+    """create_prompt reads content from file."""
+    content_file = tmp_path / "content.md"
+    content_file.write_text("File content")
+
+    outputs = []
+    monkeypatch.setattr(
+        prompts_commands.typer, "echo", lambda msg="": outputs.append(str(msg))
+    )
+
+    prompts_commands.create_prompt(
+        prompt_id="new-prompt",
+        name="New Prompt",
+        description="From file",
+        file=content_file,
+    )
+
+    prompt = cli_manager.get("new-prompt")
+    assert prompt is not None
+    assert prompt.content == "File content"
+    assert prompt.name == "New Prompt"
+    assert prompt.description == "From file"
+
+
+def test_create_prompt_empty_content(cli_manager, tmp_path, monkeypatch):
+    """create_prompt fails with empty content."""
+    content_file = tmp_path / "empty.md"
+    content_file.write_text("")
+
+    outputs = []
+    monkeypatch.setattr(
+        prompts_commands.typer, "echo", lambda msg="": outputs.append(str(msg))
+    )
+
+    with pytest.raises(prompts_commands.typer.Exit):
+        prompts_commands.create_prompt(
+            prompt_id="empty-prompt",
+            name="Empty Prompt",
+            description=None,
+            file=content_file,
+        )
+
+    combined = "\n".join(outputs)
+    assert "cannot be empty" in combined
+
+
+def test_update_prompt_success(cli_manager, tmp_path, monkeypatch):
+    """update_prompt updates existing prompt."""
+    prompt = Prompt(id="upd", name="Original", content="original content")
+    cli_manager.create(prompt)
+
+    new_content_file = tmp_path / "new_content.md"
+    new_content_file.write_text("updated content")
+
+    outputs = []
+    monkeypatch.setattr(
+        prompts_commands.typer, "echo", lambda msg="": outputs.append(str(msg))
+    )
+
+    prompts_commands.update_prompt(
+        prompt_id="upd",
+        name="Updated Name",
+        description="Updated desc",
+        file=new_content_file,
+    )
+
+    updated = cli_manager.get("upd")
+    assert updated.name == "Updated Name"
+    assert updated.description == "Updated desc"
+    assert updated.content == "updated content"
+    assert any("updated" in msg.lower() for msg in outputs)
+
+
+def test_update_prompt_not_found(cli_manager, monkeypatch):
+    """update_prompt fails when prompt not found."""
+    outputs = []
+    monkeypatch.setattr(
+        prompts_commands.typer, "echo", lambda msg="": outputs.append(str(msg))
+    )
+
+    with pytest.raises(prompts_commands.typer.Exit):
+        prompts_commands.update_prompt(
+            prompt_id="nonexistent",
+            name="New Name",
+            description=None,
+            file=None,
+        )
+
+    combined = "\n".join(outputs)
+    assert "not found" in combined
+
+
+def test_delete_prompt_success(cli_manager, monkeypatch):
+    """delete_prompt removes prompt with force flag."""
+    prompt = Prompt(id="del", name="To Delete", content="content")
+    cli_manager.create(prompt)
+
+    outputs = []
+    monkeypatch.setattr(
+        prompts_commands.typer, "echo", lambda msg="": outputs.append(str(msg))
+    )
+
+    prompts_commands.delete_prompt(prompt_id="del", force=True)
+
+    assert cli_manager.get("del") is None
+    assert any("deleted" in msg.lower() for msg in outputs)
+
+
+def test_delete_prompt_not_found(cli_manager, monkeypatch):
+    """delete_prompt fails when prompt not found."""
+    outputs = []
+    monkeypatch.setattr(
+        prompts_commands.typer, "echo", lambda msg="": outputs.append(str(msg))
+    )
+
+    with pytest.raises(prompts_commands.typer.Exit):
+        prompts_commands.delete_prompt(prompt_id="nonexistent", force=True)
+
+    combined = "\n".join(outputs)
+    assert "not found" in combined
+
+
+def test_set_default_prompt_success(cli_manager, monkeypatch):
+    """set_default_prompt sets a prompt as default."""
+    prompt = Prompt(id="def", name="Default", content="content")
+    cli_manager.create(prompt)
+
+    outputs = []
+    monkeypatch.setattr(
+        prompts_commands.typer, "echo", lambda msg="": outputs.append(str(msg))
+    )
+
+    prompts_commands.set_default_prompt(prompt_id="def")
+
+    updated = cli_manager.get("def")
+    assert updated.is_default is True
+    assert any("default" in msg.lower() for msg in outputs)
+
+
+def test_set_default_prompt_not_found(cli_manager, monkeypatch):
+    """set_default_prompt fails when prompt not found."""
+    outputs = []
+    monkeypatch.setattr(
+        prompts_commands.typer, "echo", lambda msg="": outputs.append(str(msg))
+    )
+
+    with pytest.raises(prompts_commands.typer.Exit):
+        prompts_commands.set_default_prompt(prompt_id="nonexistent")
+
+    combined = "\n".join(outputs)
+    assert "not found" in combined
+
+
+def test_clear_default_prompt(cli_manager, monkeypatch):
+    """clear_default_prompt clears the default setting."""
+    prompt = Prompt(id="def", name="Default", content="content")
+    cli_manager.create(prompt)
+    cli_manager.set_default("def")
+
+    outputs = []
+    monkeypatch.setattr(
+        prompts_commands.typer, "echo", lambda msg="": outputs.append(str(msg))
+    )
+
+    prompts_commands.clear_default_prompt()
+
+    updated = cli_manager.get("def")
+    assert updated.is_default is False
+    assert any("cleared" in msg.lower() for msg in outputs)
+
+
+def test_generate_prompt_id():
+    """generate_prompt_id creates unique IDs with prefix."""
+    id1 = prompts_commands.generate_prompt_id("test")
+    id2 = prompts_commands.generate_prompt_id("test")
+
+    assert id1.startswith("test-")
+    assert id2.startswith("test-")
+    assert id1 != id2  # Should be unique
+    assert len(id1) == len("test-") + 8  # 8 char hex UUID
+
+
+def test_parse_app_list_all():
+    """_parse_app_list returns all apps when 'all' specified."""
+    apps = prompts_commands._parse_app_list("all")
+    assert apps == prompts_commands.VALID_APP_TYPES
+
+
+def test_parse_app_list_comma_separated():
+    """_parse_app_list parses comma-separated apps."""
+    apps = prompts_commands._parse_app_list("claude,codex")
+    assert apps == ["claude", "codex"]
+
+
+def test_parse_app_list_invalid():
+    """_parse_app_list raises error for invalid apps."""
+    with pytest.raises(prompts_commands.typer.BadParameter) as exc_info:
+        prompts_commands._parse_app_list("invalid,claude")
+
+    assert "invalid" in str(exc_info.value).lower()
+
+
+def test_unsync_prompt_project_level(cli_manager, tmp_path, monkeypatch):
+    """unsync_prompt clears project-level prompt file content."""
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+    prompt_file = project_dir / "CLAUDE.md"
+    prompt_file.write_text("Content to unsync")
+
+    outputs = []
+    monkeypatch.setattr(
+        prompts_commands.typer, "echo", lambda msg="": outputs.append(str(msg))
+    )
+
+    prompts_commands.unsync_prompt(
+        app_type="claude",
+        level="project",
+        force=True,
+        project_dir=project_dir,
+    )
+
+    # unsync clears the file content, not deletes it
+    assert prompt_file.exists()
+    assert prompt_file.read_text() == ""
+    combined = "\n".join(outputs)
+    assert "cleared" in combined.lower()
+
+
+def test_unsync_prompt_file_not_found(cli_manager, tmp_path, monkeypatch):
+    """unsync_prompt handles missing file gracefully."""
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+
+    outputs = []
+    monkeypatch.setattr(
+        prompts_commands.typer, "echo", lambda msg="": outputs.append(str(msg))
+    )
+
+    prompts_commands.unsync_prompt(
+        app_type="claude",
+        level="project",
+        force=True,
+        project_dir=project_dir,
+    )
+
+    combined = "\n".join(outputs)
+    # Should indicate file doesn't exist
+    assert "not exist" in combined.lower() or "does not exist" in combined.lower()
