@@ -495,28 +495,60 @@ def browse_marketplace(
     Use --query to search by name/description, --category to filter by category.
     """
     manager = PluginManager()
+    handler = _get_handler()
 
     # Get the marketplace repo config
     repo = manager.get_repo(marketplace)
-    if not repo:
+
+    # If not in our config, try to get URL from Claude's known_marketplaces.json
+    repo_owner = None
+    repo_name = None
+    repo_branch = "main"
+
+    if repo and repo.repo_owner and repo.repo_name:
+        repo_owner = repo.repo_owner
+        repo_name = repo.repo_name
+        repo_branch = repo.repo_branch
+    else:
+        # Try to extract from Claude's known marketplaces
+        known_file = handler.known_marketplaces_file
+        if known_file.exists():
+            import json
+
+            try:
+                with open(known_file, "r") as f:
+                    known = json.load(f)
+                if marketplace in known:
+                    source_url = known[marketplace].get("source", {}).get("url", "")
+                    # Parse URL like https://github.com/owner/repo.git
+                    if "github.com" in source_url:
+                        from code_assistant_manager.plugins.fetch import (
+                            parse_github_url,
+                        )
+
+                        parsed = parse_github_url(source_url)
+                        if parsed:
+                            repo_owner, repo_name, repo_branch = parsed
+            except Exception:
+                pass
+
+    if not repo_owner or not repo_name:
         typer.echo(
-            f"{Colors.RED}✗ Marketplace '{marketplace}' not found.{Colors.RESET}"
+            f"{Colors.RED}✗ Marketplace '{marketplace}' not found in config or Claude.{Colors.RESET}"
         )
         typer.echo(f"\n{Colors.CYAN}Available repos:{Colors.RESET}")
         for name in manager.get_all_repos():
+            typer.echo(f"  • {name}")
+        typer.echo(f"\n{Colors.CYAN}Installed marketplaces:{Colors.RESET}")
+        for name in handler.get_known_marketplaces():
             typer.echo(f"  • {name}")
         raise typer.Exit(1)
 
     typer.echo(f"{Colors.CYAN}Fetching plugins from {marketplace}...{Colors.RESET}")
 
-    # Fetch marketplace info
-    if not repo.repo_owner or not repo.repo_name:
-        typer.echo(f"{Colors.RED}✗ Repo missing owner/name info.{Colors.RESET}")
-        raise typer.Exit(1)
-
     from code_assistant_manager.plugins.fetch import fetch_repo_info
 
-    info = fetch_repo_info(repo.repo_owner, repo.repo_name, repo.repo_branch)
+    info = fetch_repo_info(repo_owner, repo_name, repo_branch)
     if not info or not info.plugins:
         typer.echo(f"{Colors.RED}✗ Could not fetch plugins from repo.{Colors.RESET}")
         raise typer.Exit(1)
