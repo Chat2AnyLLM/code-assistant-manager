@@ -252,7 +252,11 @@ def uninstall_plugin(
     plugin: str = typer.Argument(..., help="Plugin name to uninstall"),
     force: bool = typer.Option(False, "--force", "-f", help="Skip confirmation"),
 ):
-    """Uninstall an installed plugin."""
+    """Uninstall an installed plugin.
+
+    For marketplace plugins, this removes the plugin from enabled plugins settings.
+    For standalone plugins, this uses Claude CLI to fully uninstall.
+    """
     _check_claude_cli()
     handler = _get_handler()
 
@@ -268,8 +272,128 @@ def uninstall_plugin(
             f"\n{Colors.YELLOW}Note: Restart Claude Code to apply changes.{Colors.RESET}"
         )
     else:
-        typer.echo(f"{Colors.RED}✗ {msg}{Colors.RESET}")
-        raise typer.Exit(1)
+        # Claude CLI failed - try to remove from settings directly
+        # This handles marketplace plugins which can't be "uninstalled" via CLI
+        typer.echo(
+            f"{Colors.YELLOW}Claude CLI uninstall failed, trying to remove from settings...{Colors.RESET}"
+        )
+
+        removed = _remove_plugin_from_settings(handler, plugin)
+        if removed:
+            typer.echo(
+                f"{Colors.GREEN}✓ Removed '{plugin}' from enabled plugins{Colors.RESET}"
+            )
+            typer.echo(
+                f"\n{Colors.YELLOW}Note: Restart Claude Code to apply changes.{Colors.RESET}"
+            )
+        else:
+            typer.echo(
+                f"{Colors.RED}✗ Plugin '{plugin}' not found in settings{Colors.RESET}"
+            )
+            raise typer.Exit(1)
+
+
+def _remove_plugin_from_settings(handler, plugin: str) -> bool:
+    """Remove a plugin from Claude's settings.json.
+
+    Args:
+        handler: Claude plugin handler
+        plugin: Plugin name (with or without @marketplace suffix)
+
+    Returns:
+        True if plugin was found and removed, False otherwise
+    """
+    import json
+
+    settings_file = handler.settings_file
+    if not settings_file.exists():
+        return False
+
+    try:
+        with open(settings_file, "r") as f:
+            settings = json.load(f)
+    except Exception:
+        return False
+
+    enabled = settings.get("enabledPlugins", {})
+    if not enabled:
+        return False
+
+    # Find matching plugin key(s)
+    keys_to_remove = []
+    plugin_lower = plugin.lower()
+    for key in enabled:
+        # Match exact key or plugin name part (before @)
+        key_name = key.split("@")[0] if "@" in key else key
+        if key.lower() == plugin_lower or key_name.lower() == plugin_lower:
+            keys_to_remove.append(key)
+
+    if not keys_to_remove:
+        return False
+
+    # Remove the plugin(s)
+    for key in keys_to_remove:
+        del enabled[key]
+
+    settings["enabledPlugins"] = enabled
+
+    # Write back
+    try:
+        with open(settings_file, "w") as f:
+            json.dump(settings, f, indent=2)
+        return True
+    except Exception:
+        return False
+
+
+def _set_plugin_enabled(handler, plugin: str, enabled: bool) -> bool:
+    """Set a plugin's enabled state in Claude's settings.json.
+
+    Args:
+        handler: Claude plugin handler
+        plugin: Plugin name (with or without @marketplace suffix)
+        enabled: True to enable, False to disable
+
+    Returns:
+        True if plugin was found and updated, False otherwise
+    """
+    import json
+
+    settings_file = handler.settings_file
+    if not settings_file.exists():
+        return False
+
+    try:
+        with open(settings_file, "r") as f:
+            settings = json.load(f)
+    except Exception:
+        return False
+
+    enabled_plugins = settings.get("enabledPlugins", {})
+
+    # Find matching plugin key
+    plugin_lower = plugin.lower()
+    matching_key = None
+    for key in enabled_plugins:
+        key_name = key.split("@")[0] if "@" in key else key
+        if key.lower() == plugin_lower or key_name.lower() == plugin_lower:
+            matching_key = key
+            break
+
+    if not matching_key:
+        return False
+
+    # Update the enabled state
+    enabled_plugins[matching_key] = enabled
+    settings["enabledPlugins"] = enabled_plugins
+
+    # Write back
+    try:
+        with open(settings_file, "w") as f:
+            json.dump(settings, f, indent=2)
+        return True
+    except Exception:
+        return False
 
 
 @plugin_app.command("enable")
@@ -289,8 +413,22 @@ def enable_plugin(
             f"\n{Colors.YELLOW}Note: Restart Claude Code to apply changes.{Colors.RESET}"
         )
     else:
-        typer.echo(f"{Colors.RED}✗ {msg}{Colors.RESET}")
-        raise typer.Exit(1)
+        # Claude CLI failed - try to enable in settings directly
+        typer.echo(
+            f"{Colors.YELLOW}Claude CLI enable failed, trying to update settings...{Colors.RESET}"
+        )
+
+        enabled = _set_plugin_enabled(handler, plugin, True)
+        if enabled:
+            typer.echo(f"{Colors.GREEN}✓ Enabled '{plugin}' in settings{Colors.RESET}")
+            typer.echo(
+                f"\n{Colors.YELLOW}Note: Restart Claude Code to apply changes.{Colors.RESET}"
+            )
+        else:
+            typer.echo(
+                f"{Colors.RED}✗ Plugin '{plugin}' not found in settings{Colors.RESET}"
+            )
+            raise typer.Exit(1)
 
 
 @plugin_app.command("disable")
@@ -310,8 +448,22 @@ def disable_plugin(
             f"\n{Colors.YELLOW}Note: Restart Claude Code to apply changes.{Colors.RESET}"
         )
     else:
-        typer.echo(f"{Colors.RED}✗ {msg}{Colors.RESET}")
-        raise typer.Exit(1)
+        # Claude CLI failed - try to disable in settings directly
+        typer.echo(
+            f"{Colors.YELLOW}Claude CLI disable failed, trying to update settings...{Colors.RESET}"
+        )
+
+        disabled = _set_plugin_enabled(handler, plugin, False)
+        if disabled:
+            typer.echo(f"{Colors.GREEN}✓ Disabled '{plugin}' in settings{Colors.RESET}")
+            typer.echo(
+                f"\n{Colors.YELLOW}Note: Restart Claude Code to apply changes.{Colors.RESET}"
+            )
+        else:
+            typer.echo(
+                f"{Colors.RED}✗ Plugin '{plugin}' not found in settings{Colors.RESET}"
+            )
+            raise typer.Exit(1)
 
 
 @plugin_app.command("validate")
