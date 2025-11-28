@@ -33,4 +33,12 @@
     "enabled": true,
     "skillsPath": "plugins"
   }
+,
+  "anthropics/claude-code": {
+    "owner": "anthropics",
+    "name": "claude-code",
+    "branch": "main",
+    "enabled": true,
+    "skillsPath": "plugins"
+  }
 }
