@@ -474,17 +474,24 @@ class TestMCPClientParallelProcessing:
             with patch(
                 "code_assistant_manager.mcp.base_client.ThreadPoolExecutor"
             ) as mock_executor:
-                mock_future = MagicMock()
-                mock_future.result.return_value = True
-                mock_executor.return_value.__enter__.return_value.submit.return_value = (
-                    mock_future
-                )
-                mock_executor.return_value.__enter__.return_value.as_completed.return_value = [
-                    mock_future,
-                    mock_future,
+                # Create mock futures
+                mock_future1 = MagicMock()
+                mock_future1.result.return_value = True
+                mock_future2 = MagicMock()
+                mock_future2.result.return_value = True
+
+                # Make submit return different futures
+                mock_executor.return_value.__enter__.return_value.submit.side_effect = [
+                    mock_future1,
+                    mock_future2,
                 ]
 
-                result = client.add_all_servers()
+                # Patch as_completed at module level (where it's imported)
+                with patch(
+                    "code_assistant_manager.mcp.base_client.as_completed",
+                    return_value=[mock_future1, mock_future2],
+                ):
+                    result = client.add_all_servers()
 
                 assert mock_executor.called
                 assert result is True
@@ -497,17 +504,24 @@ class TestMCPClientParallelProcessing:
             with patch(
                 "code_assistant_manager.mcp.base_client.ThreadPoolExecutor"
             ) as mock_executor:
-                mock_future = MagicMock()
-                mock_future.result.return_value = True
-                mock_executor.return_value.__enter__.return_value.submit.return_value = (
-                    mock_future
-                )
-                mock_executor.return_value.__enter__.return_value.as_completed.return_value = [
-                    mock_future,
-                    mock_future,
+                # Create mock futures
+                mock_future1 = MagicMock()
+                mock_future1.result.return_value = True
+                mock_future2 = MagicMock()
+                mock_future2.result.return_value = True
+
+                # Make submit return different futures
+                mock_executor.return_value.__enter__.return_value.submit.side_effect = [
+                    mock_future1,
+                    mock_future2,
                 ]
 
-                result = client.remove_all_servers()
+                # Patch as_completed at module level (where it's imported)
+                with patch(
+                    "code_assistant_manager.mcp.base_client.as_completed",
+                    return_value=[mock_future1, mock_future2],
+                ):
+                    result = client.remove_all_servers()
 
                 assert mock_executor.called
                 assert result is True
@@ -516,26 +530,29 @@ class TestMCPClientParallelProcessing:
 class TestMCPClientErrorHandling:
     """Test error handling in MCPClient."""
 
-    def test_operations_handle_exceptions_gracefully(self, client):
-        """Test that operations handle exceptions without crashing."""
+    def test_operations_return_false_for_missing_servers(self, client, sample_config):
+        """Test that operations return False for nonexistent servers."""
         with patch.object(
-            client, "get_tool_config", side_effect=Exception("Config error")
+            client, "get_tool_config", return_value=sample_config["servers"]
         ):
-            # These should not raise exceptions
-            result_add = client.add_server("test")
-            result_remove = client.remove_server("test")
-            result_list = client.list_servers()
-            result_add_all = client.add_all_servers()
-            result_remove_all = client.remove_all_servers()
-            result_refresh = client.refresh_servers()
+            # Server not in config should return False
+            result_add = client.add_server("nonexistent")
+            result_remove = client.remove_server("nonexistent")
 
-            # All should return False (failure) rather than crashing
             assert result_add is False
             assert result_remove is False
-            assert result_list is False
-            assert result_add_all is False
-            assert result_remove_all is False
-            assert result_refresh is False
+
+    def test_add_all_servers_returns_false_when_no_servers(self, client):
+        """Test add_all_servers returns False when no servers configured."""
+        with patch.object(client, "get_tool_config", return_value={}):
+            result = client.add_all_servers()
+            assert result is False
+
+    def test_remove_all_servers_returns_false_when_no_servers(self, client):
+        """Test remove_all_servers returns False when no servers configured."""
+        with patch.object(client, "get_tool_config", return_value={}):
+            result = client.remove_all_servers()
+            assert result is False
 
     def test_fallback_operations_handle_json_errors(self, client, tmp_path):
         """Test fallback operations handle JSON parsing errors."""
@@ -550,3 +567,195 @@ class TestMCPClientErrorHandling:
         # Should handle errors gracefully
         assert result_add is False
         assert result_remove is False
+
+
+class TestConfigFileHelpers:
+    """Test module-level config file helper functions."""
+
+    def test_load_config_file_json(self, tmp_path):
+        """Test loading a JSON config file."""
+        from code_assistant_manager.mcp.base_client import _load_config_file
+
+        config_path = tmp_path / "test.json"
+        config_data = {"mcpServers": {"test": {"type": "stdio"}}}
+        with open(config_path, "w") as f:
+            json.dump(config_data, f)
+
+        config, is_toml = _load_config_file(config_path)
+
+        assert config == config_data
+        assert is_toml is False
+
+    def test_load_config_file_nonexistent(self, tmp_path):
+        """Test loading a nonexistent config file returns empty dict."""
+        from code_assistant_manager.mcp.base_client import _load_config_file
+
+        config_path = tmp_path / "nonexistent.json"
+
+        config, is_toml = _load_config_file(config_path)
+
+        assert config == {}
+        assert is_toml is False
+
+    def test_load_config_file_invalid_json(self, tmp_path):
+        """Test loading invalid JSON returns None."""
+        from code_assistant_manager.mcp.base_client import _load_config_file
+
+        config_path = tmp_path / "invalid.json"
+        with open(config_path, "w") as f:
+            f.write("{ invalid json }")
+
+        config, is_toml = _load_config_file(config_path)
+
+        assert config is None
+        assert is_toml is False
+
+    def test_save_config_file_json(self, tmp_path):
+        """Test saving a JSON config file."""
+        from code_assistant_manager.mcp.base_client import _save_config_file
+
+        config_path = tmp_path / "test.json"
+        config_data = {"mcpServers": {"test": {"type": "stdio"}}}
+
+        result = _save_config_file(config_path, config_data, is_toml=False)
+
+        assert result is True
+        assert config_path.exists()
+        with open(config_path, "r") as f:
+            saved_config = json.load(f)
+        assert saved_config == config_data
+
+    def test_save_config_file_creates_parent_dirs(self, tmp_path):
+        """Test that save creates parent directories if needed."""
+        from code_assistant_manager.mcp.base_client import _save_config_file
+
+        config_path = tmp_path / "subdir" / "nested" / "test.json"
+        config_data = {"key": "value"}
+
+        result = _save_config_file(config_path, config_data, is_toml=False)
+
+        assert result is True
+        assert config_path.exists()
+
+    def test_server_exists_in_config_mcpServers(self):
+        """Test checking server existence in mcpServers structure."""
+        from code_assistant_manager.mcp.base_client import _server_exists_in_config
+
+        config = {"mcpServers": {"test_server": {"type": "stdio"}}}
+
+        assert _server_exists_in_config(config, "test_server") is True
+        assert _server_exists_in_config(config, "nonexistent") is False
+
+    def test_server_exists_in_config_servers(self):
+        """Test checking server existence in servers structure."""
+        from code_assistant_manager.mcp.base_client import _server_exists_in_config
+
+        config = {"servers": {"test_server": {"type": "http"}}}
+
+        assert _server_exists_in_config(config, "test_server") is True
+        assert _server_exists_in_config(config, "nonexistent") is False
+
+    def test_server_exists_in_config_direct(self):
+        """Test checking server existence in direct structure."""
+        from code_assistant_manager.mcp.base_client import _server_exists_in_config
+
+        config = {"test_server": {"type": "stdio"}}
+
+        assert _server_exists_in_config(config, "test_server") is True
+        assert _server_exists_in_config(config, "nonexistent") is False
+
+    def test_get_preferred_container_key_existing(self):
+        """Test getting preferred container key when one exists."""
+        from code_assistant_manager.mcp.base_client import _get_preferred_container_key
+
+        config = {"servers": {}}
+
+        result = _get_preferred_container_key(config, is_toml=False)
+
+        assert result == "servers"
+
+    def test_get_preferred_container_key_default_json(self):
+        """Test default container key for JSON files."""
+        from code_assistant_manager.mcp.base_client import _get_preferred_container_key
+
+        config = {}
+
+        result = _get_preferred_container_key(config, is_toml=False)
+
+        assert result == "mcpServers"
+
+    def test_get_preferred_container_key_default_toml(self):
+        """Test default container key for TOML files."""
+        from code_assistant_manager.mcp.base_client import _get_preferred_container_key
+
+        config = {}
+
+        result = _get_preferred_container_key(config, is_toml=True)
+
+        assert result == "mcp_servers"
+
+    def test_remove_server_from_containers_mcpServers(self):
+        """Test removing server from mcpServers container."""
+        from code_assistant_manager.mcp.base_client import (
+            _remove_server_from_containers,
+        )
+
+        config = {"mcpServers": {"server1": {}, "server2": {}}}
+
+        result = _remove_server_from_containers(config, "server1")
+
+        assert result is True
+        assert "server1" not in config["mcpServers"]
+        assert "server2" in config["mcpServers"]
+
+    def test_remove_server_from_containers_multiple(self):
+        """Test removing server that exists in multiple containers."""
+        from code_assistant_manager.mcp.base_client import (
+            _remove_server_from_containers,
+        )
+
+        config = {
+            "mcpServers": {"server1": {}},
+            "servers": {"server1": {}},
+        }
+
+        result = _remove_server_from_containers(config, "server1")
+
+        assert result is True
+        assert "server1" not in config["mcpServers"]
+        assert "server1" not in config["servers"]
+
+    def test_remove_server_from_containers_not_found(self):
+        """Test removing server that doesn't exist."""
+        from code_assistant_manager.mcp.base_client import (
+            _remove_server_from_containers,
+        )
+
+        config = {"mcpServers": {"other": {}}}
+
+        result = _remove_server_from_containers(config, "nonexistent")
+
+        assert result is False
+
+    def test_find_server_container_mcpServers(self):
+        """Test finding server in mcpServers container."""
+        from code_assistant_manager.mcp.base_client import _find_server_container
+
+        config = {"mcpServers": {"test_server": {"type": "stdio"}}}
+
+        result = _find_server_container(config, "test_server")
+
+        assert result is not None
+        key, container = result
+        assert key == "mcpServers"
+        assert "test_server" in container
+
+    def test_find_server_container_not_found(self):
+        """Test finding server that doesn't exist."""
+        from code_assistant_manager.mcp.base_client import _find_server_container
+
+        config = {"mcpServers": {"other": {}}}
+
+        result = _find_server_container(config, "nonexistent")
+
+        assert result is None

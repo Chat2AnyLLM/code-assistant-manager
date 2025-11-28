@@ -31,26 +31,31 @@ class TestFallbackOperations:
     def test_fallback_add_server_success(self, client, tmp_path):
         """Test successful fallback server addition."""
         config_path = tmp_path / "mcp.json"
+        global_config_path = tmp_path / "global_mcp.json"
 
+        # _fallback_add_server calls get_server_config and find_mcp_config (from .base)
         with patch.object(
             client,
-            "load_config",
-            return_value=(
-                True,
-                {"servers": {"test_server": {"package": "@test/package"}}},
-            ),
+            "get_server_config",
+            return_value={"package": "@test/package"},
         ):
             with patch.object(
                 client, "_get_config_locations", return_value=[config_path]
             ):
-                result = client._fallback_add_server("test_server")
+                # find_mcp_config is imported from .base inside the method
+                with patch(
+                    "code_assistant_manager.mcp.base.find_mcp_config",
+                    return_value=global_config_path,
+                ):
+                    result = client._fallback_add_server("test_server")
 
-                assert result is True
-                assert config_path.exists()
+                    assert result is True
+                    assert config_path.exists()
 
     def test_fallback_add_server_no_config(self, client):
         """Test fallback addition when no server config available."""
-        with patch.object(client, "load_config", return_value=(False, {})):
+        # get_server_config returns None when server not found
+        with patch.object(client, "get_server_config", return_value=None):
             result = client._fallback_add_server("test_server")
 
             assert result is False
@@ -59,13 +64,11 @@ class TestFallbackOperations:
         """Test fallback addition when server not in global config."""
         config_path = tmp_path / "mcp.json"
 
+        # get_server_config returns None for nonexistent servers
         with patch.object(
             client,
-            "load_config",
-            return_value=(
-                True,
-                {"servers": {"other_server": {"package": "@test/package"}}},
-            ),
+            "get_server_config",
+            return_value=None,
         ):
             with patch.object(
                 client, "_get_config_locations", return_value=[config_path]
@@ -77,6 +80,7 @@ class TestFallbackOperations:
     def test_fallback_remove_server_success(self, client, tmp_path):
         """Test successful fallback server removal."""
         config_path = tmp_path / "mcp.json"
+        global_config_path = tmp_path / "global_mcp.json"
 
         # Pre-create config with server
         config_data = {"mcpServers": {"test_server": {"type": "stdio"}}}
@@ -84,27 +88,38 @@ class TestFallbackOperations:
             json.dump(config_data, f)
 
         with patch.object(client, "_get_config_locations", return_value=[config_path]):
-            result = client._fallback_remove_server("test_server")
+            with patch(
+                "code_assistant_manager.mcp.base.find_mcp_config",
+                return_value=global_config_path,
+            ):
+                result = client._fallback_remove_server("test_server")
 
-            assert result is True
+                assert result is True
 
-            # Verify server was removed
-            with open(config_path, "r") as f:
-                updated_config = json.load(f)
-            assert "test_server" not in updated_config["mcpServers"]
+                # Verify server was removed
+                with open(config_path, "r") as f:
+                    updated_config = json.load(f)
+                assert "test_server" not in updated_config["mcpServers"]
 
-    def test_fallback_remove_server_config_not_found(self, client):
+    def test_fallback_remove_server_config_not_found(self, client, tmp_path):
         """Test fallback removal when config file doesn't exist."""
+        global_config_path = tmp_path / "global_mcp.json"
+
         with patch.object(
             client, "_get_config_locations", return_value=[Path("/nonexistent/path")]
         ):
-            result = client._fallback_remove_server("test_server")
+            with patch(
+                "code_assistant_manager.mcp.base.find_mcp_config",
+                return_value=global_config_path,
+            ):
+                result = client._fallback_remove_server("test_server")
 
-            assert result is False
+                assert result is False
 
     def test_fallback_remove_server_server_not_present(self, client, tmp_path):
         """Test fallback removal when server not in config."""
         config_path = tmp_path / "mcp.json"
+        global_config_path = tmp_path / "global_mcp.json"
 
         # Pre-create config without the server
         config_data = {"mcpServers": {"other_server": {"type": "stdio"}}}
@@ -112,9 +127,13 @@ class TestFallbackOperations:
             json.dump(config_data, f)
 
         with patch.object(client, "_get_config_locations", return_value=[config_path]):
-            result = client._fallback_remove_server("nonexistent_server")
+            with patch(
+                "code_assistant_manager.mcp.base.find_mcp_config",
+                return_value=global_config_path,
+            ):
+                result = client._fallback_remove_server("nonexistent_server")
 
-            assert result is False
+                assert result is False
 
 
 class TestConfigFileOperations:
@@ -478,20 +497,30 @@ class TestErrorRecovery:
 
     def test_operations_continue_after_individual_failures(self, client, sample_config):
         """Test that batch operations continue after individual server failures."""
-        with patch.object(client, "load_config", return_value=(True, sample_config)):
+        # Mock get_tool_config to return a small sample config instead of real config
+        tool_config = {
+            "memory": {"add_cmd": "test cmd 1"},
+            "context7": {"add_cmd": "test cmd 2"},
+        }
+        with patch.object(client, "get_tool_config", return_value=tool_config):
             with patch.object(
                 client, "_check_and_install_server", side_effect=[True, False]
             ):
                 # One server fails in the middle, but operations continue
                 result = client.add_all_servers()
 
-                # The implementation may return True even with partial failures in some cases
+                # Implementation returns False when any server fails
                 # This test verifies that operations complete without crashing
-                assert result is True
+                assert result is False
 
     def test_refresh_servers_handles_partial_failures(self, client, sample_config):
         """Test refresh_servers handles partial failures gracefully."""
-        with patch.object(client, "load_config", return_value=(True, sample_config)):
+        # Mock get_tool_config to return a small sample config
+        tool_config = {
+            "memory": {"add_cmd": "test cmd 1"},
+            "context7": {"add_cmd": "test cmd 2"},
+        }
+        with patch.object(client, "get_tool_config", return_value=tool_config):
             with patch.object(client, "_execute_remove_command", return_value=True):
                 with patch.object(
                     client, "_check_and_install_server", side_effect=[True, False]
@@ -499,9 +528,9 @@ class TestErrorRecovery:
 
                     result = client.refresh_servers()
 
-                    # The implementation may return True even with partial failures
-                    # This test verifies that refresh operations complete
-                    assert result is True
+                    # Implementation returns False when any server fails
+                    # This test verifies that refresh operations complete without crashing
+                    assert result is False
 
     def test_config_operations_handle_corrupted_files(self, client, tmp_path):
         """Test config operations handle corrupted config files."""

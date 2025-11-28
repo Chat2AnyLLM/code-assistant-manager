@@ -108,15 +108,20 @@ class TestDroidMCPClient:
 
     def test_add_all_servers(self, client, temp_config_file, temp_droid_config_file):
         """Test adding all servers from global config."""
-        with patch.object(
-            client, "_fallback_add_server", return_value=True
-        ) as mock_fallback:
-            success = client.add_all_servers()
-            assert success is True
-            # Should try to add both test_server and context7
-            assert mock_fallback.call_count == 2
-            mock_fallback.assert_any_call("test_server")
-            mock_fallback.assert_any_call("context7")
+        sample_config = {
+            "test_server": {"add_cmd": "test cmd"},
+            "context7": {"add_cmd": "ctx cmd"},
+        }
+        with patch.object(client, "get_tool_config", return_value=sample_config):
+            with patch.object(
+                client, "_fallback_add_server", return_value=True
+            ) as mock_fallback:
+                success = client.add_all_servers()
+                assert success is True
+                # Should try to add both test_server and context7
+                assert mock_fallback.call_count == 2
+                mock_fallback.assert_any_call("test_server")
+                mock_fallback.assert_any_call("context7")
 
     def test_refresh_servers(self, client, temp_droid_config_file):
         """Test refreshing servers (remove then re-add)."""

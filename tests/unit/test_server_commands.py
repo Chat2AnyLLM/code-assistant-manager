@@ -21,9 +21,14 @@ class DummyInstaller:
         self.calls = []
 
     def install_server(
-        self, server_name, client_name, installation_method=None, force=False
+        self,
+        server_name,
+        client_name,
+        installation_method=None,
+        force=False,
+        scope="user",
     ):
-        self.calls.append((server_name, client_name, installation_method, force))
+        self.calls.append((server_name, client_name, installation_method, force, scope))
         return True
 
 
@@ -55,10 +60,11 @@ def test_add_handles_comma_separated_clients(monkeypatch):
         method="auto",
         force=True,
         interactive=False,
+        scope="user",
     )
 
-    assert ("test-server", "claude", "auto", True) in dummy_installer.calls
-    assert ("test-server", "codex", "auto", True) in dummy_installer.calls
+    assert ("test-server", "claude", "auto", True, "user") in dummy_installer.calls
+    assert ("test-server", "codex", "auto", True, "user") in dummy_installer.calls
 
 
 def test_add_handles_all_keyword(monkeypatch):
@@ -83,11 +89,16 @@ def test_add_handles_all_keyword(monkeypatch):
     )
 
     server_commands.add(
-        "test-server", client="all", method=None, force=False, interactive=False
+        "test-server",
+        client="all",
+        method=None,
+        force=False,
+        interactive=False,
+        scope="user",
     )
 
-    assert ("test-server", "claude", None, False) in dummy_installer.calls
-    assert ("test-server", "codex", None, False) in dummy_installer.calls
+    assert ("test-server", "claude", None, False, "user") in dummy_installer.calls
+    assert ("test-server", "codex", None, False, "user") in dummy_installer.calls
 
 
 def test_remove_handles_comma_separated_clients(monkeypatch):
@@ -122,7 +133,9 @@ def test_remove_handles_comma_separated_clients(monkeypatch):
         ),
     )
 
-    server_commands.remove("test-server", client="claude,codex", interactive=False)
+    server_commands.remove(
+        "test-server", client="claude,codex", interactive=False, scope="user"
+    )
 
     assert ("claude", "test-server", "user") in record
     assert ("codex", "test-server", "user") in record
@@ -173,7 +186,19 @@ def test_update_handles_comma_separated_clients(monkeypatch):
         ),
     )
 
-    server_commands.update("test-server", client="claude,codex", interactive=False)
+    # Mock installation_manager to track install_server calls
+    class DummyInstallationManager:
+        def install_server(self, server_name, client_name, scope="user"):
+            record.append((client_name, "added", server_name, scope))
+            return True
+
+    monkeypatch.setattr(
+        server_commands, "installation_manager", DummyInstallationManager()
+    )
+
+    server_commands.update(
+        "test-server", client="claude,codex", interactive=False, scope="user"
+    )
 
     # ensure both remove and add recorded for each client
     assert ("claude", "removed", "test-server", "user") in record

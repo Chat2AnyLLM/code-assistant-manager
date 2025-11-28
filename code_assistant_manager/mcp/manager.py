@@ -109,6 +109,14 @@ class MCPManager(MCPBase):
             "MCP SERVERS", "Installing configured MCP servers for all tools..."
         )
 
+        # Early return if no tools are available
+        if not available_tools:
+            print_squared_frame(
+                "MCP SERVERS - COMPLETE",
+                "No tools configured for MCP server installation",
+            )
+            return True
+
         # Process tools in parallel
         results = {}
         with ThreadPoolExecutor(max_workers=len(available_tools)) as executor:
@@ -167,6 +175,13 @@ class MCPManager(MCPBase):
         print_squared_frame(
             "MCP SERVERS", "Removing configured MCP servers for all tools..."
         )
+
+        # Early return if no tools are available
+        if not available_tools:
+            print_squared_frame(
+                "MCP SERVERS - COMPLETE", "No tools configured for MCP server removal"
+            )
+            return True
 
         # Process tools in parallel
         results = {}
@@ -268,6 +283,13 @@ class MCPManager(MCPBase):
         print_squared_frame(
             "MCP SERVERS", "Listing configured MCP servers for all tools..."
         )
+
+        # Early return if no tools are available
+        if not available_tools:
+            print_squared_frame(
+                "MCP SERVERS - COMPLETE", "No tools configured for MCP server listing"
+            )
+            return True
 
         # Process tools in parallel by calling client.list_servers()
         success_status = True

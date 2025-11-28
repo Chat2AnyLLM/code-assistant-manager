@@ -40,6 +40,8 @@ class TestMCPManagerInitialization:
     @patch("code_assistant_manager.mcp.clients.ZedMCPClient")
     @patch("code_assistant_manager.mcp.clients.QoderCLIMCPClient")
     @patch("code_assistant_manager.mcp.clients.NeovateMCPClient")
+    @patch("code_assistant_manager.mcp.clients.CrushMCPClient")
+    @patch("code_assistant_manager.mcp.clients.CursorAgentMCPClient")
     def test_manager_initializes_all_clients(self, *mock_clients):
         """Test that manager initializes all expected clients."""
         manager = MCPManager()
@@ -56,6 +58,8 @@ class TestMCPManagerInitialization:
             "zed",
             "qodercli",
             "neovate",
+            "crush",
+            "cursor-agent",
         ]
 
         assert len(manager.clients) == len(expected_clients)
@@ -194,23 +198,24 @@ class TestMCPManagerParallelOperations:
             with patch.object(manager, "add_all_servers_for_tool") as mock_add_tool:
                 mock_add_tool.return_value = True
 
+                mock_future = MagicMock()
+                mock_future.result.return_value = True
+
                 with patch(
                     "code_assistant_manager.mcp.manager.ThreadPoolExecutor"
                 ) as mock_executor:
-                    mock_future = MagicMock()
-                    mock_future.result.return_value = True
                     mock_executor.return_value.__enter__.return_value.submit.return_value = (
                         mock_future
                     )
-                    mock_executor.return_value.__enter__.return_value.as_completed.return_value = [
-                        mock_future,
-                        mock_future,
-                    ]
+                    # as_completed is imported directly, need to patch it separately
+                    with patch(
+                        "code_assistant_manager.mcp.manager.as_completed",
+                        return_value=[mock_future, mock_future],
+                    ):
+                        result = manager.add_all_servers()
 
-                    result = manager.add_all_servers()
-
-                    assert mock_executor.called
-                    assert result is True
+                        assert mock_executor.called
+                        assert result is True
 
     def test_add_all_servers_handles_partial_failures(self, sample_config):
         """Test add_all_servers handles partial failures correctly."""
@@ -223,26 +228,26 @@ class TestMCPManagerParallelOperations:
                 # First call succeeds, second fails
                 mock_add_tool.side_effect = [True, False]
 
+                mock_future1 = MagicMock()
+                mock_future1.result.return_value = True
+                mock_future2 = MagicMock()
+                mock_future2.result.return_value = False
+
                 with patch(
                     "code_assistant_manager.mcp.manager.ThreadPoolExecutor"
                 ) as mock_executor:
-                    mock_future1 = MagicMock()
-                    mock_future1.result.return_value = True
-                    mock_future2 = MagicMock()
-                    mock_future2.result.return_value = False
-
                     mock_executor.return_value.__enter__.return_value.submit.side_effect = [
                         mock_future1,
                         mock_future2,
                     ]
-                    mock_executor.return_value.__enter__.return_value.as_completed.return_value = [
-                        mock_future1,
-                        mock_future2,
-                    ]
+                    # as_completed is imported directly, need to patch it separately
+                    with patch(
+                        "code_assistant_manager.mcp.manager.as_completed",
+                        return_value=[mock_future1, mock_future2],
+                    ):
+                        result = manager.add_all_servers()
 
-                    result = manager.add_all_servers()
-
-                    assert result is False  # Should fail due to partial failure
+                        assert result is False  # Should fail due to partial failure
 
     def test_remove_all_servers_processes_tools_in_parallel(self):
         """Test remove_all_servers uses parallel processing."""
@@ -256,23 +261,24 @@ class TestMCPManagerParallelOperations:
             ) as mock_remove_tool:
                 mock_remove_tool.return_value = True
 
+                mock_future = MagicMock()
+                mock_future.result.return_value = True
+
                 with patch(
                     "code_assistant_manager.mcp.manager.ThreadPoolExecutor"
                 ) as mock_executor:
-                    mock_future = MagicMock()
-                    mock_future.result.return_value = True
                     mock_executor.return_value.__enter__.return_value.submit.return_value = (
                         mock_future
                     )
-                    mock_executor.return_value.__enter__.return_value.as_completed.return_value = [
-                        mock_future,
-                        mock_future,
-                    ]
+                    # as_completed is imported directly, need to patch it separately
+                    with patch(
+                        "code_assistant_manager.mcp.manager.as_completed",
+                        return_value=[mock_future, mock_future],
+                    ):
+                        result = manager.remove_all_servers()
 
-                    result = manager.remove_all_servers()
-
-                    assert mock_executor.called
-                    assert result is True
+                        assert mock_executor.called
+                        assert result is True
 
     def test_refresh_all_servers_processes_sequentially(self):
         """Test refresh_all_servers processes tools sequentially."""
@@ -291,41 +297,30 @@ class TestMCPManagerParallelOperations:
                 assert result is True
 
     def test_list_all_servers_uses_parallel_processing(self):
-        """Test list_all_servers uses parallel subprocess calls."""
+        """Test list_all_servers uses parallel processing."""
         manager = MCPManager()
 
         with patch.object(manager, "get_available_tools", return_value=["claude"]):
-            with patch(
-                "code_assistant_manager.mcp.manager.subprocess.run"
-            ) as mock_subprocess:
-                mock_process = MagicMock()
-                mock_process.returncode = 0
-                mock_process.stdout = "Server list"
-                mock_process.stderr = ""
-                mock_subprocess.return_value = mock_process
+            with patch.object(
+                manager.clients["claude"], "list_servers", return_value=True
+            ) as mock_list:
+                mock_future = MagicMock()
+                mock_future.result.return_value = True
 
-                with patch.object(
-                    manager.clients["claude"], "get_tool_config"
-                ) as mock_get_config:
-                    mock_get_config.return_value = {
-                        "memory": {"list_cmd": "claude mcp list"}
-                    }
-
+                with patch(
+                    "code_assistant_manager.mcp.manager.ThreadPoolExecutor"
+                ) as mock_executor:
+                    mock_executor.return_value.__enter__.return_value.submit.return_value = (
+                        mock_future
+                    )
+                    # as_completed is imported directly, need to patch it separately
                     with patch(
-                        "code_assistant_manager.mcp.manager.ThreadPoolExecutor"
-                    ) as mock_executor:
-                        mock_future = MagicMock()
-                        mock_future.result.return_value = mock_process
-                        mock_executor.return_value.__enter__.return_value.submit.return_value = (
-                            mock_future
-                        )
-                        mock_executor.return_value.__enter__.return_value.as_completed.return_value = [
-                            mock_future
-                        ]
-
+                        "code_assistant_manager.mcp.manager.as_completed",
+                        return_value=[mock_future],
+                    ):
                         result = manager.list_all_servers()
 
-                        assert mock_subprocess.called
+                        assert mock_executor.called
                         assert result is True
 
 
@@ -340,21 +335,23 @@ class TestMCPManagerErrorHandling:
             with patch.object(manager, "add_all_servers_for_tool") as mock_add_tool:
                 mock_add_tool.side_effect = Exception("Test error")
 
+                mock_future = MagicMock()
+                mock_future.result.side_effect = Exception("Test error")
+
                 with patch(
                     "code_assistant_manager.mcp.manager.ThreadPoolExecutor"
                 ) as mock_executor:
-                    mock_future = MagicMock()
-                    mock_future.result.side_effect = Exception("Test error")
                     mock_executor.return_value.__enter__.return_value.submit.return_value = (
                         mock_future
                     )
-                    mock_executor.return_value.__enter__.return_value.as_completed.return_value = [
-                        mock_future
-                    ]
+                    # as_completed is imported directly, need to patch it separately
+                    with patch(
+                        "code_assistant_manager.mcp.manager.as_completed",
+                        return_value=[mock_future],
+                    ):
+                        result = manager.add_all_servers()
 
-                    result = manager.add_all_servers()
-
-                    assert result is False
+                        assert result is False
 
     def test_manager_handles_empty_tool_list(self):
         """Test manager operations handle empty tool lists gracefully."""
