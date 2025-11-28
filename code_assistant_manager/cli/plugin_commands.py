@@ -616,6 +616,148 @@ def list_repos():
     typer.echo()
 
 
+# ==================== Browse Marketplace Helper Functions ====================
+
+
+def _resolve_marketplace_repo(
+    manager: PluginManager, handler: ClaudePluginHandler, marketplace: str
+) -> tuple[Optional[str], Optional[str], str]:
+    """Resolve marketplace name to repo owner/name/branch.
+
+    Returns:
+        Tuple of (repo_owner, repo_name, repo_branch) or (None, None, "main") if not found
+    """
+    repo = manager.get_repo(marketplace)
+
+    if repo and repo.repo_owner and repo.repo_name:
+        return repo.repo_owner, repo.repo_name, repo.repo_branch
+
+    # Try Claude's known marketplaces as fallback
+    return _resolve_from_known_marketplaces(handler, marketplace)
+
+
+def _resolve_from_known_marketplaces(
+    handler: ClaudePluginHandler, marketplace: str
+) -> tuple[Optional[str], Optional[str], str]:
+    """Fallback resolution from Claude's known_marketplaces.json."""
+    import json
+
+    known_file = handler.known_marketplaces_file
+    if not known_file.exists():
+        return None, None, "main"
+
+    try:
+        with open(known_file, "r") as f:
+            known = json.load(f)
+
+        if marketplace not in known:
+            return None, None, "main"
+
+        source_url = known[marketplace].get("source", {}).get("url", "")
+        if "github.com" not in source_url:
+            return None, None, "main"
+
+        parsed = parse_github_url(source_url)
+        if parsed:
+            return parsed
+    except Exception:
+        pass
+
+    return None, None, "main"
+
+
+def _filter_plugins(
+    plugins: list[dict],
+    query: Optional[str] = None,
+    category: Optional[str] = None,
+) -> list[dict]:
+    """Filter plugins by query string and/or category."""
+    result = plugins
+
+    if query:
+        query_lower = query.lower()
+        result = [
+            p
+            for p in result
+            if query_lower in p.get("name", "").lower()
+            or query_lower in p.get("description", "").lower()
+        ]
+
+    if category:
+        category_lower = category.lower()
+        result = [p for p in result if category_lower in p.get("category", "").lower()]
+
+    return result
+
+
+def _display_marketplace_not_found(
+    manager: PluginManager, handler: ClaudePluginHandler, marketplace: str
+) -> None:
+    """Display error message when marketplace is not found."""
+    typer.echo(
+        f"{Colors.RED}✗ Marketplace '{marketplace}' not found in config or Claude.{Colors.RESET}"
+    )
+    typer.echo(f"\n{Colors.CYAN}Available repos:{Colors.RESET}")
+    for name in manager.get_all_repos():
+        typer.echo(f"  • {name}")
+    typer.echo(f"\n{Colors.CYAN}Installed marketplaces:{Colors.RESET}")
+    for name in handler.get_known_marketplaces():
+        typer.echo(f"  • {name}")
+
+
+def _display_marketplace_header(
+    info, query: Optional[str], category: Optional[str], total: int
+) -> None:
+    """Display marketplace info header."""
+    typer.echo(
+        f"\n{Colors.BOLD}{info.name}{Colors.RESET} - {info.description or 'No description'}"
+    )
+    if info.version:
+        typer.echo(f"Version: {info.version}")
+    typer.echo(f"Total plugins: {info.plugin_count}")
+    if query or category:
+        typer.echo(f"Matching: {total}")
+
+
+def _display_plugin(plugin: dict) -> None:
+    """Display a single plugin entry."""
+    name = plugin.get("name", "unknown")
+    version = plugin.get("version", "")
+    desc = plugin.get("description", "")
+    cat = plugin.get("category", "")
+
+    version_str = f" v{version}" if version else ""
+    cat_str = f" [{cat}]" if cat else ""
+
+    typer.echo(
+        f"  {Colors.BOLD}{name}{Colors.RESET}{version_str}{Colors.CYAN}{cat_str}{Colors.RESET}"
+    )
+    if desc:
+        if len(desc) > 80:
+            desc = desc[:77] + "..."
+        typer.echo(f"    {desc}")
+
+
+def _display_marketplace_footer(info, marketplace: str, total: int, limit: int) -> None:
+    """Display marketplace footer with categories and install hint."""
+    if total > limit:
+        typer.echo(f"\n  ... and {total - limit} more")
+
+    categories = {p.get("category") for p in info.plugins if p.get("category")}
+    if categories:
+        typer.echo(
+            f"\n{Colors.CYAN}Categories:{Colors.RESET} {', '.join(sorted(categories))}"
+        )
+
+    typer.echo(
+        f"\n{Colors.CYAN}Install with:{Colors.RESET} cam plugin install <plugin-name>@{marketplace}"
+    )
+    typer.echo()
+
+
+# ==================== Browse Marketplace Command ====================
+
+
 @plugin_app.command("browse")
 def browse_marketplace(
     marketplace: str = typer.Argument(
@@ -646,135 +788,40 @@ def browse_marketplace(
     Fetches the marketplace manifest from GitHub and lists all available plugins.
     Use --query to search by name/description, --category to filter by category.
     """
+    from code_assistant_manager.plugins.fetch import fetch_repo_info
+
     manager = PluginManager()
     handler = _get_handler()
 
-    # Get the marketplace repo config
-    repo = manager.get_repo(marketplace)
-
-    # If not in our config, try to get URL from Claude's known_marketplaces.json
-    repo_owner = None
-    repo_name = None
-    repo_branch = "main"
-
-    if repo and repo.repo_owner and repo.repo_name:
-        repo_owner = repo.repo_owner
-        repo_name = repo.repo_name
-        repo_branch = repo.repo_branch
-    else:
-        # Try to extract from Claude's known marketplaces
-        known_file = handler.known_marketplaces_file
-        if known_file.exists():
-            import json
-
-            try:
-                with open(known_file, "r") as f:
-                    known = json.load(f)
-                if marketplace in known:
-                    source_url = known[marketplace].get("source", {}).get("url", "")
-                    # Parse URL like https://github.com/owner/repo.git
-                    if "github.com" in source_url:
-                        from code_assistant_manager.plugins.fetch import (
-                            parse_github_url,
-                        )
-
-                        parsed = parse_github_url(source_url)
-                        if parsed:
-                            repo_owner, repo_name, repo_branch = parsed
-            except Exception:
-                pass
+    # Resolve marketplace to repo info
+    repo_owner, repo_name, repo_branch = _resolve_marketplace_repo(
+        manager, handler, marketplace
+    )
 
     if not repo_owner or not repo_name:
-        typer.echo(
-            f"{Colors.RED}✗ Marketplace '{marketplace}' not found in config or Claude.{Colors.RESET}"
-        )
-        typer.echo(f"\n{Colors.CYAN}Available repos:{Colors.RESET}")
-        for name in manager.get_all_repos():
-            typer.echo(f"  • {name}")
-        typer.echo(f"\n{Colors.CYAN}Installed marketplaces:{Colors.RESET}")
-        for name in handler.get_known_marketplaces():
-            typer.echo(f"  • {name}")
+        _display_marketplace_not_found(manager, handler, marketplace)
         raise typer.Exit(1)
 
+    # Fetch plugins
     typer.echo(f"{Colors.CYAN}Fetching plugins from {marketplace}...{Colors.RESET}")
-
-    from code_assistant_manager.plugins.fetch import fetch_repo_info
-
     info = fetch_repo_info(repo_owner, repo_name, repo_branch)
+
     if not info or not info.plugins:
         typer.echo(f"{Colors.RED}✗ Could not fetch plugins from repo.{Colors.RESET}")
         raise typer.Exit(1)
 
-    # Filter plugins
-    plugins = info.plugins
-    if query:
-        query_lower = query.lower()
-        plugins = [
-            p
-            for p in plugins
-            if query_lower in p.get("name", "").lower()
-            or query_lower in p.get("description", "").lower()
-        ]
-
-    if category:
-        category_lower = category.lower()
-        plugins = [
-            p for p in plugins if category_lower in p.get("category", "").lower()
-        ]
-
-    # Display results
+    # Filter and display
+    plugins = _filter_plugins(info.plugins, query, category)
     total = len(plugins)
     plugins = plugins[:limit]
 
-    typer.echo(
-        f"\n{Colors.BOLD}{info.name}{Colors.RESET} - {info.description or 'No description'}"
-    )
-    if info.version:
-        typer.echo(f"Version: {info.version}")
-    typer.echo(f"Total plugins: {info.plugin_count}")
-
-    if query or category:
-        typer.echo(f"Matching: {total}")
-
+    _display_marketplace_header(info, query, category, total)
     typer.echo(f"\n{Colors.BOLD}Plugins:{Colors.RESET}\n")
 
-    # Get unique categories for reference
-    categories = set()
-    for p in info.plugins:
-        if p.get("category"):
-            categories.add(p["category"])
+    for plugin in plugins:
+        _display_plugin(plugin)
 
-    for p in plugins:
-        name = p.get("name", "unknown")
-        version = p.get("version", "")
-        desc = p.get("description", "")
-        cat = p.get("category", "")
-
-        version_str = f" v{version}" if version else ""
-        cat_str = f" [{cat}]" if cat else ""
-
-        typer.echo(
-            f"  {Colors.BOLD}{name}{Colors.RESET}{version_str}{Colors.CYAN}{cat_str}{Colors.RESET}"
-        )
-        if desc:
-            # Truncate long descriptions
-            if len(desc) > 80:
-                desc = desc[:77] + "..."
-            typer.echo(f"    {desc}")
-
-    if total > limit:
-        typer.echo(f"\n  ... and {total - limit} more")
-
-    # Show categories if available
-    if categories:
-        typer.echo(
-            f"\n{Colors.CYAN}Categories:{Colors.RESET} {', '.join(sorted(categories))}"
-        )
-
-    typer.echo(
-        f"\n{Colors.CYAN}Install with:{Colors.RESET} cam plugin install <plugin-name>@{marketplace}"
-    )
-    typer.echo()
+    _display_marketplace_footer(info, marketplace, total, limit)
 
 
 @plugin_app.command("fetch")

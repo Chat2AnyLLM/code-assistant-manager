@@ -10,6 +10,193 @@ from .env_loader import load_env
 
 logger = logging.getLogger(__name__)
 
+# ==================== Command Validation Pattern Constants ====================
+
+# Dangerous patterns for command chaining that should never be allowed
+DANGEROUS_COMMAND_CHAINING = frozenset(
+    [
+        ";rm ",
+        "; rm ",
+        "|rm ",
+        "| rm ",
+        "&&rm ",
+        "&& rm ",
+        "||rm ",
+        "|| rm ",
+        ";reboot",
+        "|reboot",
+        "&&reboot",
+        "||reboot",
+        ";shutdown",
+        "|shutdown",
+        "&&shutdown",
+        "||shutdown",
+    ]
+)
+
+# Dangerous shell constructs for command substitution
+DANGEROUS_SHELL_CONSTRUCTS = frozenset(
+    [
+        "`",  # Command substitution (backticks)
+        "$(",  # Command substitution
+    ]
+)
+
+# Dangerous file redirections
+DANGEROUS_REDIRECTS = frozenset(
+    [
+        ">/etc/",
+        ">>/etc/",
+        "< /etc/",
+        " | sh",
+        " | bash",
+        " > /",
+        " >> /",
+        " < /",
+    ]
+)
+
+# Dangerous system commands
+DANGEROUS_SYSTEM_COMMANDS = frozenset(
+    [
+        "sudo ",
+        "su ",
+        "chmod ",
+        "chown ",
+        "mv ",
+        "cp ",
+        "ln ",
+        "mount ",
+        "umount ",
+        "kill ",
+        "killall ",
+        "crontab ",
+        "at ",
+        "systemctl ",
+        "service ",
+        "init ",
+    ]
+)
+
+# Dangerous network commands
+DANGEROUS_NETWORK_COMMANDS = frozenset(
+    [
+        "telnet ",
+        "nc ",
+        "netcat ",
+        "ssh ",
+        "scp ",
+        "rsync ",
+        "wget ",
+        "ftp ",
+        "sftp ",
+    ]
+)
+
+# Dangerous git operations
+DANGEROUS_GIT_OPERATIONS = frozenset(
+    [
+        "git clone ",
+        "git push ",
+        "git pull ",
+        "git fetch ",
+        "git checkout ",
+    ]
+)
+
+# Dangerous package manager commands
+DANGEROUS_PACKAGE_MANAGERS = frozenset(
+    [
+        "pip install ",
+        "npm install ",
+        "yarn add ",
+        "gem install ",
+        "apt-get ",
+        "yum ",
+        "dnf ",
+        "brew ",
+        "make install",
+        "configure ",
+        "install ",
+        "setup ",
+    ]
+)
+
+# Dangerous code execution commands
+DANGEROUS_CODE_EXECUTION = frozenset(
+    [
+        "eval ",
+        "exec ",
+        "source ",
+        "import ",
+        "require ",
+        "include ",
+        "import-module ",
+        "add-module ",
+    ]
+)
+
+# Dangerous file paths that should never be accessed
+DANGEROUS_FILE_PATHS = frozenset(
+    [
+        "/etc/passwd",
+        "/etc/shadow",
+        "/etc/group",
+        "/etc/sudoers",
+        "/root/",
+        "/home/",
+        "/usr/bin/",
+        "/bin/",
+        "/sbin/",
+        "~/.ssh/",
+        "~/.bashrc",
+        "~/.zshrc",
+        "~/.profile",
+    ]
+)
+
+# Safe shell constructs that are allowed
+SAFE_SHELL_CONSTRUCTS = frozenset(
+    [
+        "|",  # Pipe
+        "&&",  # Command chaining
+        ". ",  # Source command
+        "${",  # Variable expansion
+    ]
+)
+
+# Safe executables allowed for direct execution
+SAFE_EXECUTABLES = frozenset(
+    [
+        "curl",
+        "wget",
+        "echo",
+        "cat",
+        "python",
+        "python3",
+        "node",
+        "npm",
+        "sh",
+        "bash",
+        "ls",
+        "pwd",
+        "whoami",
+        "date",
+        "git",
+        "docker",
+        "jq",
+        "grep",
+        "find",
+        "wc",
+        "sort",
+        "uniq",
+        "head",
+        "tail",
+        "sed",
+        "awk",
+    ]
+)
+
 
 class ConfigManager:
     """Manages providers.json file parsing and endpoint configuration."""
@@ -193,8 +380,7 @@ class ConfigManager:
             logger.debug("No .env file found or failed to load")
 
     def validate_config(self) -> Tuple[bool, List[str]]:
-        """
-        Validate the entire configuration with caching.
+        """Validate the entire configuration with caching.
 
         Returns:
             Tuple of (is_valid, list_of_errors)
@@ -203,91 +389,122 @@ class ConfigManager:
         current_time = time.time()
 
         # Return cached result if still valid
-        if (
-            self._validation_cache is not None
-            and current_time - self._validation_cache_time < self._validation_cache_ttl
-        ):
+        if self._is_validation_cache_valid(current_time):
             logger.debug("Using cached validation result")
             return self._validation_cache
 
-        errors = []
         logger.debug("Performing fresh config validation")
+        errors = []
 
         # Validate common section
-        common_config = self.get_common_config()
-        if common_config:
-            # Validate proxy URLs if present
-            http_proxy = common_config.get("http_proxy", "")
-            if http_proxy and not validate_url(http_proxy):
-                errors.append(f"Invalid HTTP proxy URL: {http_proxy}")
+        errors.extend(_validate_common_config(self.get_common_config()))
 
-            https_proxy = common_config.get("https_proxy", "")
-            if https_proxy and not validate_url(https_proxy):
-                errors.append(f"Invalid HTTPS proxy URL: {https_proxy}")
-
-            cache_ttl = common_config.get("cache_ttl_seconds", "")
-            if cache_ttl:
-                try:
-                    int(cache_ttl)
-                except ValueError:
-                    errors.append(f"Invalid cache_ttl_seconds value: {cache_ttl}")
-
-        # Validate endpoints
+        # Validate each endpoint
         endpoints = self.config_data.get("endpoints", {})
         for endpoint_name, endpoint_config in endpoints.items():
-            # Validate endpoint URL
-            endpoint_url = endpoint_config.get("endpoint", "")
-            if not endpoint_url:
-                errors.append(f"Missing endpoint URL for {endpoint_name}")
-            elif not validate_url(endpoint_url):
-                errors.append(
-                    f"Invalid endpoint URL for {endpoint_name}: {endpoint_url}"
-                )
-
-            # Validate api_key_env if present
-            api_key_env = endpoint_config.get("api_key_env", "")
-            if api_key_env and not validate_non_empty_string(api_key_env):
-                errors.append(f"Invalid api_key_env for {endpoint_name}: {api_key_env}")
-
-            # Validate list_models_cmd if present
-            list_models_cmd = endpoint_config.get("list_models_cmd", "")
-            if list_models_cmd and not validate_command(list_models_cmd):
-                errors.append(
-                    f"Invalid list_models_cmd for {endpoint_name}: {list_models_cmd}"
-                )
-
-            # Validate boolean values
-            keep_proxy_config = endpoint_config.get("keep_proxy_config", "")
-            if keep_proxy_config and not validate_boolean(keep_proxy_config):
-                errors.append(
-                    f"Invalid keep_proxy_config for {endpoint_name}: {keep_proxy_config}"
-                )
-
-            use_proxy = endpoint_config.get("use_proxy", "")
-            if use_proxy and not validate_boolean(use_proxy):
-                errors.append(f"Invalid use_proxy for {endpoint_name}: {use_proxy}")
-
-            # Validate supported_client if present
-            supported_client = endpoint_config.get("supported_client", "")
-            if supported_client and not validate_non_empty_string(supported_client):
-                errors.append(
-                    f"Invalid supported_client for {endpoint_name}: {supported_client}"
-                )
+            errors.extend(_validate_endpoint(endpoint_name, endpoint_config))
 
         result = (len(errors) == 0, errors)
+        self._cache_validation_result(result, current_time)
 
-        # Cache the result
+        return result
+
+    def _is_validation_cache_valid(self, current_time: float) -> bool:
+        """Check if validation cache is still valid."""
+        return (
+            self._validation_cache is not None
+            and current_time - self._validation_cache_time < self._validation_cache_ttl
+        )
+
+    def _cache_validation_result(
+        self, result: Tuple[bool, List[str]], current_time: float
+    ) -> None:
+        """Cache validation result with logging."""
         self._validation_cache = result
         self._validation_cache_time = current_time
 
-        if errors:
+        if result[1]:  # Has errors
             logger.warning(
-                f"Config validation failed with {len(errors)} errors: {errors}"
+                f"Config validation failed with {len(result[1])} errors: {result[1]}"
             )
         else:
             logger.debug("Config validation passed")
 
-        return result
+
+# ==================== Config Validation Helper Functions ====================
+
+
+def _validate_common_config(common_config: dict) -> List[str]:
+    """Validate common configuration section.
+
+    Args:
+        common_config: The common section of the config
+
+    Returns:
+        List of validation errors
+    """
+    errors = []
+
+    if not common_config:
+        return errors
+
+    # Validate proxy URLs
+    for proxy_key in ["http_proxy", "https_proxy"]:
+        proxy_url = common_config.get(proxy_key, "")
+        if proxy_url and not validate_url(proxy_url):
+            label = proxy_key.upper().replace("_", " ")
+            errors.append(f"Invalid {label} URL: {proxy_url}")
+
+    # Validate cache TTL
+    cache_ttl = common_config.get("cache_ttl_seconds", "")
+    if cache_ttl:
+        try:
+            int(cache_ttl)
+        except ValueError:
+            errors.append(f"Invalid cache_ttl_seconds value: {cache_ttl}")
+
+    return errors
+
+
+def _validate_endpoint(endpoint_name: str, endpoint_config: dict) -> List[str]:
+    """Validate a single endpoint configuration.
+
+    Args:
+        endpoint_name: Name of the endpoint
+        endpoint_config: Configuration dict for the endpoint
+
+    Returns:
+        List of validation errors
+    """
+    errors = []
+
+    # Required: endpoint URL
+    endpoint_url = endpoint_config.get("endpoint", "")
+    if not endpoint_url:
+        errors.append(f"Missing endpoint URL for {endpoint_name}")
+    elif not validate_url(endpoint_url):
+        errors.append(f"Invalid endpoint URL for {endpoint_name}: {endpoint_url}")
+
+    # Optional field validations with validators
+    string_fields = ["api_key_env", "supported_client"]
+    for field_name in string_fields:
+        value = endpoint_config.get(field_name, "")
+        if value and not validate_non_empty_string(value):
+            errors.append(f"Invalid {field_name} for {endpoint_name}: {value}")
+
+    # Validate list_models_cmd if present
+    list_models_cmd = endpoint_config.get("list_models_cmd", "")
+    if list_models_cmd and not validate_command(list_models_cmd):
+        errors.append(f"Invalid list_models_cmd for {endpoint_name}: {list_models_cmd}")
+
+    # Validate boolean fields
+    boolean_fields = ["keep_proxy_config", "use_proxy"]
+    for field_name in boolean_fields:
+        value = endpoint_config.get(field_name, "")
+        if value and not validate_boolean(value):
+            errors.append(f"Invalid {field_name} for {endpoint_name}: {value}")
+
+    return errors
 
 
 def validate_url(url: str) -> bool:
@@ -381,149 +598,69 @@ def validate_non_empty_string(value: str) -> bool:
     return bool(value and value.strip())
 
 
-def validate_command(value: str) -> bool:
-    """
-    Validate a command string with balanced security and functionality.
+# ==================== Command Validation Helper Functions ====================
 
-    Args:
-        value: Command string to validate
 
-    Returns:
-        True if valid, False otherwise
-    """
-    if not value:
+def _contains_dangerous_pattern(value: str, patterns: frozenset) -> bool:
+    """Check if value contains any pattern from the set (case-insensitive)."""
+    value_lower = value.lower()
+    return any(pattern in value_lower for pattern in patterns)
+
+
+def _contains_dangerous_redirect(value: str) -> bool:
+    """Check for dangerous file redirections."""
+    return any(pattern in value for pattern in DANGEROUS_REDIRECTS)
+
+
+def _contains_dangerous_file_path(value: str) -> bool:
+    """Check for dangerous file paths."""
+    return any(path in value for path in DANGEROUS_FILE_PATHS)
+
+
+def _contains_safe_shell_construct(value: str) -> bool:
+    """Check if command contains safe shell constructs."""
+    return any(construct in value for construct in SAFE_SHELL_CONSTRUCTS)
+
+
+def _is_safe_executable(executable: str) -> bool:
+    """Validate if an executable is safe to run."""
+    import os
+
+    # Absolute paths are not allowed for security
+    if os.path.isabs(executable):
         return False
 
-    # Strip leading/trailing whitespace
-    value = value.strip()
-
-    # Check for obviously dangerous patterns that should never be allowed
-    obviously_dangerous_patterns = [
-        ";rm ",
-        "; rm ",  # rm command execution
-        "|rm ",
-        "| rm ",  # rm command execution
-        "&&rm ",
-        "&& rm ",  # rm command execution
-        "||rm ",
-        "|| rm ",  # rm command execution
-        ";reboot",  # System reboot
-        ";shutdown",  # System shutdown
-        "|reboot",  # System reboot
-        "|shutdown",  # System shutdown
-        "&&reboot",  # System reboot
-        "&&shutdown",  # System shutdown
-        "||reboot",  # System reboot
-        "||shutdown",  # System shutdown
-        "`",  # Command substitution (backticks) - too dangerous
-        "$(",  # Command substitution - too dangerous
-        ">/etc/",  # Writing to system files
-        ">>/etc/",  # Appending to system files
-        "< /etc/",  # Reading from system files
-        " | sh",
-        " | bash",  # Piping to shell
-        " > /",
-        " >> /",  # Writing to root
-        " < /",  # Reading from root
-        "sudo ",  # Privilege escalation
-        "su ",  # User switching
-        "chmod ",  # Permission changes
-        "chown ",  # Ownership changes
-        "mv ",  # File moving
-        "cp ",  # File copying
-        "ln ",  # Link creation
-        "mount ",  # Mounting filesystems
-        "umount ",  # Unmounting filesystems
-        "kill ",  # Process killing
-        "killall ",  # Killing processes by name
-        "crontab ",  # Cron job manipulation
-        "at ",  # Scheduled command execution
-        "systemctl ",  # System service control
-        "service ",  # Service management
-        "init ",  # System initialization
-        "telnet ",  # Network connections
-        "nc ",  # Network connections
-        "netcat ",  # Network connections
-        "ssh ",  # SSH connections
-        "scp ",  # File transfers
-        "rsync ",  # File synchronization
-        "wget ",  # File downloads (more specific)
-        # 'curl ' is allowed as a legitimate command - specific dangerous curl patterns are checked elsewhere
-        "ftp ",  # FTP connections
-        "sftp ",  # Secure file transfers
-        "git clone ",  # Repository cloning
-        "git push ",  # Repository pushing
-        "git pull ",  # Repository pulling
-        "git fetch ",  # Repository fetching
-        "git checkout ",  # Repository checkout
-        "pip install ",  # Package installation
-        "npm install ",  # Node package installation
-        "yarn add ",  # Yarn package installation
-        "gem install ",  # Ruby gem installation
-        "apt-get ",  # Package management
-        "yum ",  # Package management
-        "dnf ",  # Package management
-        "brew ",  # Package management
-        "make install",  # Build and install
-        "configure ",  # Configuration scripts
-        "install ",  # Generic install commands
-        "setup ",  # Setup scripts
-        "eval ",  # Code evaluation
-        "exec ",  # Code execution
-        "source ",  # Source commands (bash)
-        # '. ' is handled as a safe construct
-        "import ",  # Python import (if used in shell context)
-        "require ",  # Node.js require (if used in shell context)
-        "include ",  # C-style includes
-        "import-module ",  # PowerShell module import
-        "add-module ",  # PowerShell module addition
-        "import-module ",  # PowerShell module import
-    ]
-    # Check for obviously dangerous patterns
-    if any(pattern in value.lower() for pattern in obviously_dangerous_patterns):
-        return False
-
-    # Check for dangerous file operations with specific paths
-    dangerous_file_operations = [
-        "/etc/passwd",
-        "/etc/shadow",
-        "/etc/group",
-        "/etc/sudoers",
-        "/root/",
-        "/home/",
-        "/usr/bin/",
-        "/bin/",
-        "/sbin/",
-        "~/.ssh/",
-        "~/.bashrc",
-        "~/.zshrc",
-        "~/.profile",
-    ]
-
-    if any(path in value for path in dangerous_file_operations):
-        return False
-    # Allow commonly used safe shell constructs
-    # These are needed for legitimate use cases like the examples in providers.json
-    safe_shell_constructs = [
-        "|",  # Pipe (used in the litellm example)
-        "&&",  # Command chaining (used in the copilot-api example)
-        ". ",  # Source command (used in the copilot-api example)
-        "${",  # Variable expansion (used in the litellm example)
-    ]
-
-    # If the command contains safe shell constructs, allow it
-    # The dangerous patterns check above will still catch malicious usage
-    if any(construct in value for construct in safe_shell_constructs):
+    # Relative paths are allowed (they must point to current directory or subdirectories)
+    if "/" in executable and not executable.startswith("/"):
         return True
 
-    # For simple commands without shell constructs, use the original validation logic
-    # Split command into parts (executable and arguments)
+    # Check against safe executables list
+    return executable in SAFE_EXECUTABLES
+
+
+def _validate_command_arguments(args: list[str]) -> bool:
+    """Validate command arguments for dangerous patterns."""
+    dangerous_arg_patterns = frozenset([";", "&", "`", "$(", ">>", "<<"])
+
+    for arg in args:
+        # Check for dangerous patterns in arguments
+        if any(pattern in arg for pattern in dangerous_arg_patterns):
+            return False
+
+        # Check for dangerous file paths in arguments
+        if _contains_dangerous_file_path(arg):
+            return False
+
+    return True
+
+
+def _validate_simple_command(value: str) -> bool:
+    """Validate a simple command without shell constructs."""
     import shlex
 
     try:
         parts = shlex.split(value)
     except ValueError:
-        # If we can't parse it, it's likely malicious
         return False
 
     if not parts:
@@ -534,74 +671,64 @@ def validate_command(value: str) -> bool:
         if all(validate_model_id(p) for p in parts):
             return True
     except Exception:
-        # If validate_model_id is not suitable for a token, fall back to executable checks
         pass
 
-    # Validate executable (first part)
-    executable = parts[0]
-
-    # Allow only specific safe executables or paths
-    safe_executables = {
-        "curl",
-        "wget",
-        "echo",
-        "cat",
-        "python",
-        "python3",
-        "node",
-        "npm",
-        "sh",
-        "bash",
-        "ls",
-        "pwd",
-        "whoami",
-        "date",
-        "git",
-        "docker",
-        "jq",
-        "grep",
-        "find",
-        "wc",
-        "sort",
-        "uniq",
-        "head",
-        "tail",
-        "sed",
-        "awk",
-    }
-    # Check if it's a direct path to a file in current directory or subdirectories
-    import os
-
-    if os.path.isabs(executable):
-        # Absolute paths are not allowed for security
+    # Validate executable
+    if not _is_safe_executable(parts[0]):
         return False
 
-    # Check if it's a relative path (contains / but not at the beginning)
-    if "/" in executable and not executable.startswith("/"):
-        # Relative paths are allowed for security - they can't be used for command injection
-        # since they must point to files in the current directory or subdirectories
-        pass  # Allow all relative paths
-    elif executable not in safe_executables:
-        # Not a recognized safe executable
+    # Validate arguments
+    return _validate_command_arguments(parts[1:])
+
+
+# ==================== Command Validation Main Function ====================
+
+
+def validate_command(value: str) -> bool:
+    """Validate a command string with balanced security and functionality.
+
+    Args:
+        value: Command string to validate
+
+    Returns:
+        True if valid, False otherwise
+    """
+    if not value:
         return False
 
-    # Validate arguments (remaining parts)
-    for arg in parts[1:]:
-        # Check for dangerous patterns in arguments
-        dangerous_patterns = [";", "&", "`", "$(", ">>", "<<"]
+    value = value.strip()
 
-        # Check for obviously dangerous patterns in arguments
-        if any(pattern in arg for pattern in dangerous_patterns):
-            return False
+    # Check for dangerous command chaining patterns
+    if _contains_dangerous_pattern(value, DANGEROUS_COMMAND_CHAINING):
+        return False
 
-        # Check for variable expansion in arguments (allow it in quotes)
-        if "$" in arg and not arg.startswith("'") and not arg.endswith("'"):
-            # Allow $ in single quotes (literal) but not in unquoted strings
-            # This is a compromise to allow legitimate usage while preventing some injection
-            pass  # Allow it for now since we've already checked for command substitution
+    # Check for dangerous shell constructs
+    if _contains_dangerous_pattern(value, DANGEROUS_SHELL_CONSTRUCTS):
+        return False
 
-        # Check for dangerous file paths in arguments
-        if any(path in arg for path in dangerous_file_operations):
-            return False
+    # Check for dangerous redirects
+    if _contains_dangerous_redirect(value):
+        return False
 
-    return True
+    # Check all dangerous command categories
+    dangerous_categories = [
+        DANGEROUS_SYSTEM_COMMANDS,
+        DANGEROUS_NETWORK_COMMANDS,
+        DANGEROUS_GIT_OPERATIONS,
+        DANGEROUS_PACKAGE_MANAGERS,
+        DANGEROUS_CODE_EXECUTION,
+    ]
+
+    if any(_contains_dangerous_pattern(value, cat) for cat in dangerous_categories):
+        return False
+
+    # Check for dangerous file paths
+    if _contains_dangerous_file_path(value):
+        return False
+
+    # Allow safe shell constructs (pipe, chaining, etc.)
+    if _contains_safe_shell_construct(value):
+        return True
+
+    # Validate simple commands
+    return _validate_simple_command(value)

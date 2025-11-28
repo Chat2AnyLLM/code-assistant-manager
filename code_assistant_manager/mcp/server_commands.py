@@ -107,6 +107,72 @@ def search(query: str = typer.Argument(..., help="Search query to filter servers
     console.print(table)
 
 
+# ==================== Show Command Helper Functions ====================
+
+
+def _display_optional_field(label: str, value: Optional[str]) -> None:
+    """Display an optional field if it has a value."""
+    if value:
+        console.print(f"[bold]{label}:[/] {value}")
+
+
+def _display_author_info(author: Optional[dict]) -> None:
+    """Display author information."""
+    if not author:
+        return
+
+    author_info = author.get("name", "Unknown")
+    if author.get("url"):
+        author_info += f" ({author['url']})"
+    console.print(f"[bold]Author:[/] {author_info}")
+
+
+def _display_installation_methods(installations: dict) -> None:
+    """Display available installation methods."""
+    console.print(f"\n[bold]Installation Methods:[/]")
+    for method_name, method in installations.items():
+        recommended = " [green](recommended)[/]" if method.recommended else ""
+        console.print(f"  • {method_name}: {method.description}{recommended}")
+        if method.command:
+            args_str = " ".join(method.args) if method.args else ""
+            console.print(f"    [dim]{method.command} {args_str}[/]")
+
+
+def _display_tools(tools: Optional[list]) -> None:
+    """Display available tools."""
+    if not tools:
+        return
+
+    tool_names = []
+    for tool in tools:
+        if isinstance(tool, dict) and "name" in tool:
+            tool_names.append(tool["name"])
+        elif isinstance(tool, str):
+            tool_names.append(tool)
+
+    if tool_names:
+        console.print(f"\n[bold]Available Tools:[/] {', '.join(tool_names)}")
+
+
+def _display_examples(examples: Optional[list]) -> None:
+    """Display usage examples."""
+    if not examples:
+        return
+
+    console.print(f"\n[bold]Usage Examples:[/]")
+    for i, example in enumerate(examples, 1):
+        title = example.get("title", f"Example {i}")
+        description = example.get("description", "")
+        prompt = example.get("prompt", "")
+
+        console.print(f"  [cyan]{title}[/]: {description}")
+        if prompt:
+            console.print(f'  Try: [italic]"{prompt}"[/]\n')
+
+
+# ==================== Show Command ====================
+
+
 @app.command()
 def show(
     server_name: str,
@@ -127,57 +193,28 @@ def show(
         console.print(json.dumps(server_schema.model_dump(), indent=2))
         return
 
-    # Formatted info display
-    console.print(
-        f"\n[bold]{server_schema.display_name or server_schema.name}[/] ([cyan]{server_schema.name}[/])"
-    )
+    # Header
+    display_name = server_schema.display_name or server_schema.name
+    console.print(f"\n[bold]{display_name}[/] ([cyan]{server_schema.name}[/])")
     console.print(f"[dim]{server_schema.description}[/]\n")
 
-    if server_schema.repository:
-        console.print(f"[bold]Repository:[/] {server_schema.repository}")
+    # Optional metadata fields
+    _display_optional_field("Repository", server_schema.repository)
+    _display_optional_field("License", server_schema.license)
+    _display_author_info(server_schema.author)
 
-    if server_schema.license:
-        console.print(f"[bold]License:[/] {server_schema.license}")
+    # Installation methods
+    _display_installation_methods(server_schema.installations)
 
-    if server_schema.author:
-        author_info = server_schema.author.get("name", "Unknown")
-        if server_schema.author.get("url"):
-            author_info += f" ({server_schema.author['url']})"
-        console.print(f"[bold]Author:[/] {author_info}")
-
-    console.print(f"\n[bold]Installation Methods:[/]")
-    for method_name, method in server_schema.installations.items():
-        recommended = " [green](recommended)[/]" if method.recommended else ""
-        console.print(f"  • {method_name}: {method.description}{recommended}")
-        if method.command:
-            args_str = " ".join(method.args) if method.args else ""
-            console.print(f"    [dim]{method.command} {args_str}[/]")
-
+    # Categories and tags
     if server_schema.categories:
         console.print(f"\n[bold]Categories:[/] {', '.join(server_schema.categories)}")
-
     if server_schema.tags:
         console.print(f"[bold]Tags:[/] {', '.join(server_schema.tags)}")
 
-    if server_schema.tools:
-        tool_names = []
-        for tool in server_schema.tools:
-            if isinstance(tool, dict) and "name" in tool:
-                tool_names.append(tool["name"])
-            elif isinstance(tool, str):
-                tool_names.append(tool)
-        console.print(f"\n[bold]Available Tools:[/] {', '.join(tool_names)}")
-
-    if server_schema.examples:
-        console.print(f"\n[bold]Usage Examples:[/]")
-        for i, example in enumerate(server_schema.examples, 1):
-            title = example.get("title", f"Example {i}")
-            description = example.get("description", "")
-            prompt = example.get("prompt", "")
-
-            console.print(f"  [cyan]{title}[/]: {description}")
-            if prompt:
-                console.print(f'  Try: [italic]"{prompt}"[/]\n')
+    # Tools and examples
+    _display_tools(server_schema.tools)
+    _display_examples(server_schema.examples)
 
 
 @app.command()
