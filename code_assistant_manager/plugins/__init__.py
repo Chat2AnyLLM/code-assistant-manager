@@ -1,0 +1,36 @@
+"""Plugin management for AI coding assistants.
+
+This module provides functionality to manage plugins for AI coding assistants:
+- Claude Code: ~/.claude/plugins/
+
+Plugins are installed from GitHub repositories or local directories.
+"""
+
+from .base import BasePluginHandler
+from .claude import ClaudePluginHandler
+from .manager import (
+    BUILTIN_PLUGIN_REPOS,
+    PLUGIN_HANDLERS,
+    VALID_APP_TYPES,
+    PluginManager,
+    get_handler,
+)
+from .models import Marketplace, Plugin, PluginRepo
+
+__all__ = [
+    # Models
+    "Plugin",
+    "Marketplace",
+    "PluginRepo",
+    # Base handler
+    "BasePluginHandler",
+    # App-specific handlers
+    "ClaudePluginHandler",
+    # Manager
+    "PluginManager",
+    "get_handler",
+    # Constants
+    "PLUGIN_HANDLERS",
+    "VALID_APP_TYPES",
+    "BUILTIN_PLUGIN_REPOS",
+]

@@ -1,0 +1,11 @@
+{
+  "compounding-engineering": {
+    "name": "compounding-engineering",
+    "description": "A Claude Code plugin for compounding engineering practices",
+    "repoOwner": "EveryInc",
+    "repoName": "compounding-engineering-plugin",
+    "repoBranch": "main",
+    "pluginPath": "plugins/compounding-engineering",
+    "enabled": true
+  }
+}
