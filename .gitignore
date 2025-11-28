@@ -16,3 +16,4 @@ dist
 .crush/
 .mcp.json
 .venv
+.claude/*
