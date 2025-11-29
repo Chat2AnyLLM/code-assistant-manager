@@ -1002,6 +1002,128 @@ def browse_marketplace(
     _display_marketplace_footer(info, marketplace, total, limit)
 
 
+@plugin_app.command("view")
+def view_plugin(
+    plugin: str = typer.Argument(
+        ...,
+        help="Plugin name to view (e.g., 'document-skills' or 'document-skills@anthropic-agent-skills')",
+    ),
+    app_type: str = typer.Option(
+        "claude",
+        "--app",
+        "-a",
+        help=f"App type ({', '.join(VALID_APP_TYPES)})",
+    ),
+):
+    """View detailed information about a specific plugin.
+
+    Shows the plugin description, version, category, and source marketplace.
+    You can specify just the plugin name or include the marketplace name
+    with the @ format (e.g., 'plugin-name@marketplace').
+    """
+    from code_assistant_manager.plugins.fetch import fetch_repo_info
+
+    app = resolve_single_app(app_type, VALID_APP_TYPES, default="claude")
+    manager = PluginManager()
+
+    # Parse plugin name and marketplace if provided
+    parts = plugin.split("@")
+    plugin_name = parts[0]
+    marketplace_filter = parts[1] if len(parts) > 1 else None
+
+    all_repos = manager.get_all_repos()
+    if not all_repos:
+        typer.echo(f"{Colors.YELLOW}No plugin repositories configured{Colors.RESET}")
+        raise typer.Exit(1)
+
+    # Search for the plugin
+    found_plugin = None
+    found_marketplace = None
+
+    for repo_name, repo in all_repos.items():
+        if marketplace_filter and repo_name.lower() != marketplace_filter.lower():
+            continue
+
+        if not repo.repo_owner or not repo.repo_name:
+            continue
+
+        # Fetch repo info
+        info = fetch_repo_info(
+            repo.repo_owner, repo.repo_name, repo.repo_branch or "main"
+        )
+        if not info:
+            continue
+
+        if info.type == "marketplace":
+            # Search in marketplace plugins
+            for p in info.plugins:
+                if p.get("name", "").lower() == plugin_name.lower():
+                    found_plugin = p
+                    found_marketplace = repo_name
+                    break
+        else:
+            # Check if this is the plugin
+            if info.name.lower() == plugin_name.lower():
+                found_plugin = {
+                    "name": info.name,
+                    "version": info.version or "1.0.0",
+                    "description": info.description or "No description provided",
+                    "category": "",
+                    "source": info.plugin_path or "./",
+                }
+                found_marketplace = repo_name
+                break
+
+        if found_plugin:
+            break
+
+    if not found_plugin:
+        typer.echo(
+            f"{Colors.RED}✗ Plugin '{plugin}' not found in configured repositories{Colors.RESET}"
+        )
+        typer.echo()
+        typer.echo(f"{Colors.CYAN}Try browsing available plugins:{Colors.RESET}")
+        if marketplace_filter:
+            typer.echo(f"  cam plugin browse {marketplace_filter}")
+        else:
+            typer.echo(f"  cam plugin browse")
+        raise typer.Exit(1)
+
+    # Display plugin details
+    typer.echo(f"\n{Colors.BOLD}{found_plugin.get('name', 'Unknown')}{Colors.RESET}")
+
+    version = found_plugin.get("version")
+    if version:
+        typer.echo(f"{Colors.CYAN}Version:{Colors.RESET} {version}")
+
+    category = found_plugin.get("category")
+    if category:
+        typer.echo(f"{Colors.CYAN}Category:{Colors.RESET} {category}")
+
+    typer.echo(f"{Colors.CYAN}Marketplace:{Colors.RESET} {found_marketplace}")
+
+    description = found_plugin.get("description")
+    if description:
+        typer.echo(f"\n{Colors.CYAN}Description:{Colors.RESET}")
+        typer.echo(f"  {description}")
+
+    source = found_plugin.get("source")
+    if source:
+        typer.echo(f"\n{Colors.CYAN}Source:{Colors.RESET} {source}")
+
+    skills = found_plugin.get("skills")
+    if skills:
+        typer.echo(f"\n{Colors.CYAN}Skills:{Colors.RESET}")
+        for skill in skills:
+            typer.echo(f"  • {skill}")
+
+    typer.echo()
+    typer.echo(
+        f"{Colors.CYAN}Install:{Colors.RESET} cam plugin install {plugin_name}@{found_marketplace}"
+    )
+    typer.echo()
+
+
 @plugin_app.command("fetch")
 def fetch_repo(
     url: Optional[str] = typer.Argument(
