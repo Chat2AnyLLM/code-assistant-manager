@@ -18,7 +18,8 @@ code-assistant-manager 提供单一 CLI 来访问多个 AI 编码助手（如 Cl
 
 开发/可编辑安装：
 
-pip install -e .
+# 暂时无法通过 pip 安装，请运行安装脚本
+./install.sh
 
 运行示例：
 

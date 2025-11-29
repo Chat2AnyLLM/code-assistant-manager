@@ -8,7 +8,7 @@
 
 **One CLI to Rule Them All.**
 <br>
-Tired of juggling multiple AI coding assistants? **CAM** is a unified Python CLI to manage configurations, prompts, skills, and plugins for **14 AI assistants** including Claude, Codex, Gemini, Qwen, Copilot, and more from a single, polished terminal interface.
+Tired of juggling multiple AI coding assistants? **CAM** is a unified Python CLI to manage configurations, prompts, skills, and plugins for **13 AI assistants** including Claude, Codex, Gemini, Qwen, Copilot, and more from a single, polished terminal interface.
 
 </div>
 
@@ -39,7 +39,7 @@ CAM solves this by providing a single, consistent interface to manage everything
 
 ## Supported AI Assistants
 
-CAM supports **14 AI coding assistants**:
+CAM supports **13 AI coding assistants**:
 
 | Assistant | Description |
 | :--- | :--- |
@@ -67,12 +67,13 @@ CAM supports **14 AI coding assistants**:
 | **Plugin** Support | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ |
 | **MCP** Integration | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 
-> **Note:** MCP integration is supported for all 14 assistants including Cursor, Crush, iFlow, Neovate, Qoder, and Zed.
+> **Note:** MCP integration primarily supports Claude, Codex, Gemini, and Droid.
 
 ## Installation
 
 ```bash
-pip install code-assistant-manager
+# Not available via pip yet; run the installer
+./install.sh
 ```
 
 ## Quick Start
