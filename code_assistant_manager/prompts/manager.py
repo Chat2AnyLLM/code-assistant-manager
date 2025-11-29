@@ -5,7 +5,7 @@ import logging
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Type
+from typing import Dict, List, Optional, Tuple, Type
 
 from .base import BasePromptHandler
 from .claude import ClaudePromptHandler
@@ -89,34 +89,41 @@ class PromptManager:
 
     # ==================== Prompt Storage Operations ====================
 
-    def _load_prompts(self) -> Dict[str, Prompt]:
-        """Load prompts from file."""
+    def _load_data(self) -> Tuple[Dict[str, Prompt], Dict[str, str]]:
+        """Load prompts and active prompts mapping from file."""
         if not self.prompts_file.exists():
-            return {}
+            return {}, {}
 
         try:
             with open(self.prompts_file, "r") as f:
                 data = json.load(f)
-            return {
-                prompt_id: Prompt.from_dict(prompt_data)
-                for prompt_id, prompt_data in data.items()
-            }
+
+            prompts = {}
+            active_prompts = {}
+
+            # Extract prompts
+            for prompt_id, prompt_data in data.items():
+                if prompt_id != "_activePrompts":
+                    prompts[prompt_id] = Prompt.from_dict(prompt_data)
+
+            # Extract active prompts mapping
+            if "_activePrompts" in data:
+                active_prompts = data["_activePrompts"]
+
+            return prompts, active_prompts
         except Exception as e:
             logger.warning(f"Failed to load prompts: {e}")
-            return {}
+            return {}, {}
 
-    def _save_prompts(self, prompts: Dict[str, Prompt]) -> None:
-        """Save prompts to file."""
-        try:
-            data = {
-                prompt_id: prompt.to_dict() for prompt_id, prompt in prompts.items()
-            }
-            with open(self.prompts_file, "w") as f:
-                json.dump(data, f, indent=2)
-            logger.debug(f"Saved {len(prompts)} prompts to {self.prompts_file}")
-        except Exception as e:
-            logger.error(f"Failed to save prompts: {e}")
-            raise
+    def _load_prompts(self) -> Dict[str, Prompt]:
+        """Load prompts from file."""
+        prompts, _ = self._load_data()
+        return prompts
+
+    def _load_active_prompts(self) -> Dict[str, str]:
+        """Load active prompts mapping from file."""
+        _, active_prompts = self._load_data()
+        return active_prompts
 
     def get_all(self) -> Dict[str, Prompt]:
         """Get all prompts."""
@@ -127,23 +134,83 @@ class PromptManager:
         prompts = self._load_prompts()
         return prompts.get(prompt_id)
 
+    def get_active_prompt(
+        self, app_type: str, level: str = "user", project_dir: Optional[Path] = None
+    ) -> Optional[str]:
+        """Get the active prompt ID for a specific app/level combination."""
+        active_prompts = self._load_active_prompts()
+        key = self._make_active_key(app_type, level, project_dir)
+        return active_prompts.get(key)
+
+    def set_active_prompt(
+        self,
+        prompt_id: str,
+        app_type: str,
+        level: str = "user",
+        project_dir: Optional[Path] = None,
+    ) -> None:
+        """Set the active prompt for a specific app/level combination."""
+        prompts = self._load_prompts()
+        active_prompts = self._load_active_prompts()
+
+        if prompt_id not in prompts:
+            raise ValueError(f"Prompt with id '{prompt_id}' not found")
+
+        key = self._make_active_key(app_type, level, project_dir)
+        active_prompts[key] = prompt_id
+        self._save_data(prompts, active_prompts)
+        logger.info(f"Set active prompt: {prompt_id} for {app_type} ({level})")
+
+    def _make_active_key(
+        self, app_type: str, level: str, project_dir: Optional[Path]
+    ) -> str:
+        """Create a key for the active prompts mapping."""
+        if level == "project":
+            # For project level, include project path to distinguish different projects
+            project_path = str(project_dir or Path.cwd())
+            return f"{app_type}:{level}:{project_path}"
+        else:
+            return f"{app_type}:{level}"
+
+    def _save_data(
+        self, prompts: Dict[str, Prompt], active_prompts: Dict[str, str]
+    ) -> None:
+        """Save prompts and active prompts mapping to file."""
+        try:
+            data = {
+                prompt_id: prompt.to_dict() for prompt_id, prompt in prompts.items()
+            }
+            # Always include activePrompts
+            data["_activePrompts"] = active_prompts
+            with open(self.prompts_file, "w") as f:
+                json.dump(data, f, indent=2)
+            logger.debug(
+                f"Saved {len(prompts)} prompts and {len(active_prompts)} active mappings to {self.prompts_file}"
+            )
+        except Exception as e:
+            logger.error(f"Failed to save prompts: {e}")
+            raise
+
     def create(self, prompt: Prompt) -> None:
         """Create a new prompt."""
         prompts = self._load_prompts()
         if prompt.id in prompts:
             raise ValueError(f"Prompt with id '{prompt.id}' already exists")
         prompts[prompt.id] = prompt
-        self._save_prompts(prompts)
+        active_prompts = self._load_active_prompts()
+        self._save_data(prompts, active_prompts)
         logger.info(f"Created prompt: {prompt.id}")
 
     def update(self, prompt: Prompt) -> None:
         """Update an existing prompt."""
+        print("DEBUG: update method called!")  # Debug
         prompts = self._load_prompts()
         if prompt.id not in prompts:
             raise ValueError(f"Prompt with id '{prompt.id}' not found")
         prompt.updated_at = int(datetime.now().timestamp() * 1000)
         prompts[prompt.id] = prompt
-        self._save_prompts(prompts)
+        active_prompts = self._load_active_prompts()
+        self._save_data(prompts, active_prompts)
         logger.info(f"Updated prompt: {prompt.id}")
 
     def upsert(self, prompt: Prompt) -> None:
@@ -151,7 +218,8 @@ class PromptManager:
         prompts = self._load_prompts()
         prompt.updated_at = int(datetime.now().timestamp() * 1000)
         prompts[prompt.id] = prompt
-        self._save_prompts(prompts)
+        active_prompts = self._load_active_prompts()
+        self._save_data(prompts, active_prompts)
         logger.info(f"Upserted prompt: {prompt.id}")
 
     def delete(self, prompt_id: str) -> None:
@@ -160,7 +228,8 @@ class PromptManager:
         if prompt_id not in prompts:
             raise ValueError(f"Prompt with id '{prompt_id}' not found")
         del prompts[prompt_id]
-        self._save_prompts(prompts)
+        active_prompts = self._load_active_prompts()
+        self._save_data(prompts, active_prompts)
         logger.info(f"Deleted prompt: {prompt_id}")
 
     def import_from_file(self, file_path: Path) -> None:
@@ -187,7 +256,8 @@ class PromptManager:
                         prompts[prompt.id] = prompt
                         imported_count += 1
 
-            self._save_prompts(prompts)
+            active_prompts = self._load_active_prompts()
+            self._save_data(prompts, active_prompts)
             logger.info(f"Imported {imported_count} prompts from {file_path}")
         except Exception as e:
             logger.error(f"Failed to import prompts: {e}")
@@ -226,7 +296,8 @@ class PromptManager:
         prompts[prompt_id].is_default = True
         prompts[prompt_id].updated_at = int(datetime.now().timestamp() * 1000)
 
-        self._save_prompts(prompts)
+        active_prompts = self._load_active_prompts()
+        self._save_data(prompts, active_prompts)
         logger.info(f"Set default prompt: {prompt_id}")
 
     def clear_default(self) -> None:
@@ -237,7 +308,8 @@ class PromptManager:
                 p.is_default = False
                 p.updated_at = int(datetime.now().timestamp() * 1000)
 
-        self._save_prompts(prompts)
+        active_prompts = self._load_active_prompts()
+        self._save_data(prompts, active_prompts)
         logger.info("Cleared default prompt")
 
     def get_default(self) -> Optional[Prompt]:
@@ -287,6 +359,9 @@ class PromptManager:
 
         # Sync to the target prompt file using the handler
         handler.sync_prompt(prompt.content, level, project_dir)
+
+        # Record this prompt as active for this app/level
+        self.set_active_prompt(prompt_id, app_type, level, project_dir)
 
         logger.info(
             f"Synced prompt: {prompt_id} to {app_type} ({level} -> {target_file})"
@@ -359,6 +434,8 @@ class PromptManager:
 
             try:
                 handler.sync_prompt(default_prompt.content, level, project_dir)
+                # Record this prompt as active for this app/level
+                self.set_active_prompt(default_prompt.id, app_type, level, project_dir)
                 results[app_type] = target_file
                 logger.info(f"Synced default prompt to {app_type} ({level})")
             except Exception as e:
@@ -418,7 +495,8 @@ class PromptManager:
         )
 
         prompts[prompt_id] = prompt
-        self._save_prompts(prompts)
+        active_prompts = self._load_active_prompts()
+        self._save_data(prompts, active_prompts)
 
         logger.info(f"Imported prompt: {prompt_id}")
         return prompt_id
@@ -468,8 +546,12 @@ class PromptManager:
         else:
             raise ValueError(f"Unknown instruction type: {instruction_type}")
 
+        # Record this prompt as active for copilot
+        self.set_active_prompt(prompt_id, "copilot", "project", project_dir)
+
         prompt.updated_at = int(datetime.now().timestamp() * 1000)
-        self._save_prompts(prompts)
+        active_prompts = self._load_active_prompts()
+        self._save_data(prompts, active_prompts)
         logger.info(
             f"Synced prompt {prompt_id} to Copilot {instruction_type} instructions"
         )
@@ -523,7 +605,8 @@ class PromptManager:
         )
 
         prompts[prompt_id] = prompt
-        self._save_prompts(prompts)
+        active_prompts = self._load_active_prompts()
+        self._save_data(prompts, active_prompts)
 
         logger.info(f"Imported Copilot instructions: {prompt_id}")
         return prompt_id

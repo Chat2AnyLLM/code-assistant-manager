@@ -72,10 +72,36 @@ def list_prompts():
 
     typer.echo(f"\n{Colors.BOLD}Prompts:{Colors.RESET}\n")
     for prompt_id, prompt in sorted(prompts.items()):
+        # Check if this prompt is active for any apps by comparing content
+        active_apps = []
+        for app_type in VALID_APP_TYPES:
+            try:
+                if app_type == "copilot":
+                    # Copilot uses project level
+                    live_content = manager.get_copilot_instructions()
+                else:
+                    # Other apps use user level
+                    live_content = manager.get_live_content(app_type, level="user")
+
+                if live_content and live_content.strip() == prompt.content.strip():
+                    active_apps.append(app_type.capitalize())
+            except Exception:
+                # Ignore errors when checking live content
+                pass
+
+        status_parts = []
         if prompt.is_default:
-            status = f"{Colors.GREEN}★ default{Colors.RESET}"
+            status_parts.append(f"{Colors.GREEN}★ default{Colors.RESET}")
+        if active_apps:
+            status_parts.append(
+                f"{Colors.BLUE}linked: {', '.join(active_apps)}{Colors.RESET}"
+            )
+
+        if status_parts:
+            status = " | ".join(status_parts)
         else:
             status = f"{Colors.CYAN}○{Colors.RESET}"
+
         typer.echo(f"{status} {Colors.BOLD}{prompt.name}{Colors.RESET}")
         typer.echo(f"  {Colors.CYAN}ID:{Colors.RESET} {prompt_id}")
         if prompt.description:
@@ -591,6 +617,21 @@ def show_live_prompt(
             typer.echo(f"\n{Colors.BOLD}Live prompt for {app}:{Colors.RESET}")
             typer.echo(f"{Colors.CYAN}Level:{Colors.RESET} {lvl}")
             typer.echo(f"{Colors.CYAN}File:{Colors.RESET} {file_path}")
+
+            # Check which prompt is linked to this file
+            linked_prompt = None
+            if content:
+                # Find which stored prompt matches this content
+                for prompt_id, prompt in manager.get_all().items():
+                    if prompt.content.strip() == content.strip():
+                        linked_prompt = prompt
+                        break
+
+            if linked_prompt:
+                typer.echo(
+                    f"{Colors.BLUE}Linked Prompt:{Colors.RESET} {linked_prompt.name} ({linked_prompt.id})"
+                )
+
             typer.echo()
 
             if content:
@@ -613,6 +654,21 @@ def _show_copilot(manager: PromptManager, project_dir: Optional[Path]):
     typer.echo(f"\n{Colors.BOLD}Live prompt for copilot:{Colors.RESET}")
     typer.echo(f"{Colors.CYAN}Level:{Colors.RESET} project")
     typer.echo(f"{Colors.CYAN}File:{Colors.RESET} {file_path}")
+
+    # Check which prompt is linked to this file
+    linked_prompt = None
+    if content:
+        # Find which stored prompt matches this content
+        for prompt_id, prompt in manager.get_all().items():
+            if prompt.content.strip() == content.strip():
+                linked_prompt = prompt
+                break
+
+    if linked_prompt:
+        typer.echo(
+            f"{Colors.BLUE}Linked Prompt:{Colors.RESET} {linked_prompt.name} ({linked_prompt.id})"
+        )
+
     typer.echo()
 
     if content:
@@ -780,7 +836,7 @@ def show_prompt_status(
         for app_type in apps_for_level:
             # Handle Copilot specially
             if app_type == "copilot":
-                _show_copilot_status(project_dir)
+                _show_copilot_status(manager, project_dir)
                 continue
 
             file_path = get_prompt_file_path(
@@ -789,6 +845,28 @@ def show_prompt_status(
 
             typer.echo(f"{Colors.BOLD}{app_type.capitalize()}:{Colors.RESET}")
             typer.echo(f"  {Colors.CYAN}File:{Colors.RESET} {file_path}")
+
+            # Check which prompt is linked to this file
+            linked_prompt = None
+            try:
+                live_content = manager.get_live_content(
+                    app_type,
+                    level=lvl,
+                    project_dir=project_dir if lvl == "project" else None,
+                )
+                if live_content:
+                    # Find which stored prompt matches this content
+                    for prompt_id, prompt in manager.get_all().items():
+                        if prompt.content.strip() == live_content.strip():
+                            linked_prompt = prompt
+                            break
+            except Exception:
+                pass
+
+            if linked_prompt:
+                typer.echo(
+                    f"  {Colors.BLUE}Linked Prompt:{Colors.RESET} {linked_prompt.name} ({linked_prompt.id})"
+                )
 
             if file_path and file_path.exists():
                 content = file_path.read_text(encoding="utf-8")
@@ -805,13 +883,31 @@ def show_prompt_status(
             typer.echo()
 
 
-def _show_copilot_status(project_dir: Optional[Path]):
+def _show_copilot_status(manager: PromptManager, project_dir: Optional[Path]):
     """Helper to show Copilot status."""
     base_dir = project_dir or Path.cwd()
     file_path = base_dir / ".github" / "copilot-instructions.md"
 
     typer.echo(f"{Colors.BOLD}Copilot:{Colors.RESET}")
     typer.echo(f"  {Colors.CYAN}File:{Colors.RESET} {file_path}")
+
+    # Check which prompt is linked to this file
+    linked_prompt = None
+    try:
+        live_content = manager.get_copilot_instructions(project_dir=project_dir)
+        if live_content:
+            # Find which stored prompt matches this content
+            for prompt_id, prompt in manager.get_all().items():
+                if prompt.content.strip() == live_content.strip():
+                    linked_prompt = prompt
+                    break
+    except Exception:
+        pass
+
+    if linked_prompt:
+        typer.echo(
+            f"  {Colors.BLUE}Linked Prompt:{Colors.RESET} {linked_prompt.name} ({linked_prompt.id})"
+        )
 
     if file_path.exists():
         content = file_path.read_text(encoding="utf-8")
