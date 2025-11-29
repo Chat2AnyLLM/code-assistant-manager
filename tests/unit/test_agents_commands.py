@@ -163,7 +163,7 @@ class TestFetchAgents:
 
     def test_fetch_agents_success(self, dummy_agent_manager, capsys):
         """Test successful agent fetch."""
-        agents_commands.fetch_agents()
+        agents_commands.fetch_agents(url=None, save=False, agents_path=None)
         captured = capsys.readouterr()
         assert "Found 1 agents" in captured.out
         assert "test-agent" in captured.out
@@ -177,14 +177,14 @@ class TestFetchAgents:
         dummy_agent_manager.fetch_agents_from_repos = raise_error
 
         with pytest.raises((SystemExit, click.exceptions.Exit)):
-            agents_commands.fetch_agents()
+            agents_commands.fetch_agents(url=None, save=False, agents_path=None)
 
         captured = capsys.readouterr()
         assert "Error fetching agents" in captured.out
 
     def test_fetch_agents_shows_install_hint(self, dummy_agent_manager, capsys):
         """Test that install hint is shown after fetch."""
-        agents_commands.fetch_agents()
+        agents_commands.fetch_agents(url=None, save=False, agents_path=None)
         captured = capsys.readouterr()
         assert "cam agent list" in captured.out
 

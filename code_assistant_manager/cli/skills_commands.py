@@ -12,6 +12,7 @@ from code_assistant_manager.cli.option_utils import (
     resolve_single_app,
 )
 from code_assistant_manager.menu.base import Colors
+from code_assistant_manager.plugins.fetch import parse_github_url
 from code_assistant_manager.skills import (
     VALID_APP_TYPES,
     Skill,
@@ -77,10 +78,98 @@ def list_skills(
 
 
 @skill_app.command("fetch")
-def fetch_skills():
-    """Fetch skills from configured repositories."""
+def fetch_skills(
+    url: Optional[str] = typer.Argument(
+        None,
+        help="GitHub URL or owner/repo to fetch and save (e.g., https://github.com/owner/repo or owner/repo)",
+    ),
+    save: bool = typer.Option(
+        False,
+        "--save",
+        "-s",
+        help="Save the fetched repo to config (only used with URL argument)",
+    ),
+    skills_path: Optional[str] = typer.Option(
+        None,
+        "--skills-path",
+        help="Skills subdirectory path in the repo (only used with URL argument)",
+    ),
+):
+    """Fetch skills from configured repositories or a specific GitHub URL.
+
+    Without URL: Fetches skills from all configured repositories.
+    With URL: Fetches info from a specific GitHub repo and optionally saves it.
+
+    Examples:
+        cam skill fetch                     # Fetch from all configured repos
+        cam skill fetch owner/repo --save   # Fetch and save a new repo
+        cam skill fetch https://github.com/owner/repo --save --skills-path skills
+    """
     manager = _get_skill_manager()
 
+    # If URL provided, fetch from that specific repo
+    if url:
+        typer.echo(f"{Colors.CYAN}Fetching repository info...{Colors.RESET}")
+
+        # Parse and validate URL
+        parsed = parse_github_url(url)
+        if not parsed:
+            typer.echo(f"{Colors.RED}✗ Invalid GitHub URL: {url}{Colors.RESET}")
+            raise typer.Exit(1)
+
+        owner, repo, branch = parsed
+        typer.echo(f"  Repository: {Colors.BOLD}{owner}/{repo}{Colors.RESET}")
+
+        # Display results
+        typer.echo(f"\n{Colors.BOLD}Repository Information:{Colors.RESET}\n")
+        typer.echo(f"  {Colors.CYAN}Owner:{Colors.RESET} {owner}")
+        typer.echo(f"  {Colors.CYAN}Repo:{Colors.RESET} {repo}")
+        typer.echo(f"  {Colors.CYAN}Branch:{Colors.RESET} {branch}")
+        if skills_path:
+            typer.echo(f"  {Colors.CYAN}Skills Path:{Colors.RESET} {skills_path}")
+
+        # Save if requested
+        if save:
+            # Check if already exists
+            existing_repos = manager.get_repos()
+            repo_id = f"{owner}/{repo}"
+            existing = next(
+                (r for r in existing_repos if f"{r.owner}/{r.name}" == repo_id), None
+            )
+            if existing:
+                typer.echo(
+                    f"\n{Colors.YELLOW}Repository '{repo_id}' already exists in config.{Colors.RESET}"
+                )
+                if not typer.confirm("Overwrite?"):
+                    raise typer.Exit(0)
+
+            # Create SkillRepo and save
+            skill_repo = SkillRepo(
+                owner=owner,
+                name=repo,
+                branch=branch,
+                enabled=True,
+                skills_path=skills_path,
+            )
+            manager.add_repo(skill_repo)
+            typer.echo(
+                f"\n{Colors.GREEN}✓ Saved '{repo_id}' to user config{Colors.RESET}"
+            )
+            typer.echo(f"  Config file: {manager.repos_file}")
+
+            # Show next steps
+            typer.echo(
+                f"\n{Colors.CYAN}Next:{Colors.RESET} cam skill fetch  # to fetch skills from all repos"
+            )
+        else:
+            typer.echo(
+                f"\n{Colors.CYAN}To save:{Colors.RESET} cam skill fetch '{url}' --save"
+            )
+
+        typer.echo()
+        return
+
+    # No URL provided - fetch from all configured repos
     typer.echo(f"{Colors.CYAN}Fetching skills from repositories...{Colors.RESET}")
 
     try:

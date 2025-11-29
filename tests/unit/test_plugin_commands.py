@@ -11,7 +11,6 @@ from code_assistant_manager.cli.plugin_commands import (
     _get_handler,
     _remove_plugin_from_settings,
     _set_plugin_enabled,
-    marketplace_app,
     plugin_app,
 )
 
@@ -124,72 +123,6 @@ class TestHelperFunctions:
         result = _set_plugin_enabled(mock_handler, "test-plugin", enabled=True)
 
         assert result is False
-
-
-class TestMarketplaceCommands:
-    """Test marketplace subcommands."""
-
-    def test_marketplace_add_success(self, runner):
-        """Test successful marketplace addition."""
-        mock_handler = create_mock_handler()
-        mock_handler.marketplace_add.return_value = (True, "Marketplace added")
-
-        with patch(
-            "code_assistant_manager.cli.plugin_commands._get_handler",
-            return_value=mock_handler,
-        ):
-            with patch("code_assistant_manager.cli.plugin_commands._check_claude_cli"):
-                result = runner.invoke(marketplace_app, ["add", "owner/repo"])
-
-        assert result.exit_code == 0
-        assert "Marketplace added" in result.output
-
-    def test_marketplace_add_failure(self, runner):
-        """Test failed marketplace addition."""
-        mock_handler = create_mock_handler()
-        mock_handler.marketplace_add.return_value = (False, "Failed to add")
-
-        with patch(
-            "code_assistant_manager.cli.plugin_commands._get_handler",
-            return_value=mock_handler,
-        ):
-            with patch("code_assistant_manager.cli.plugin_commands._check_claude_cli"):
-                result = runner.invoke(marketplace_app, ["add", "owner/repo"])
-
-        assert result.exit_code == 1
-        assert "Failed to add" in result.output
-
-    def test_marketplace_remove_success(self, runner):
-        """Test successful marketplace removal."""
-        mock_handler = create_mock_handler()
-        mock_handler.marketplace_remove.return_value = (True, "Marketplace removed")
-
-        with patch(
-            "code_assistant_manager.cli.plugin_commands._get_handler",
-            return_value=mock_handler,
-        ):
-            with patch("code_assistant_manager.cli.plugin_commands._check_claude_cli"):
-                # Use input="y\n" to confirm the prompt (workaround for Python 3.14-nogil issue with --force flag)
-                result = runner.invoke(
-                    marketplace_app, ["remove", "test-market"], input="y\n"
-                )
-
-        assert result.exit_code == 0
-        assert "Marketplace removed" in result.output
-
-    def test_marketplace_list(self, runner):
-        """Test marketplace list command."""
-        mock_handler = create_mock_handler()
-        mock_handler.marketplace_list.return_value = (True, [])
-
-        with patch(
-            "code_assistant_manager.cli.plugin_commands._get_handler",
-            return_value=mock_handler,
-        ):
-            with patch("code_assistant_manager.cli.plugin_commands._check_claude_cli"):
-                result = runner.invoke(marketplace_app, ["list"])
-
-        assert result.exit_code == 0
 
 
 class TestPluginCommands:
@@ -333,21 +266,3 @@ class TestRepoCommands:
             result = runner.invoke(plugin_app, ["info"])
 
         assert result.exit_code == 0
-
-
-class TestCliNotFound:
-    """Test behavior when Claude CLI is not found."""
-
-    def test_marketplace_command_without_cli(self, runner):
-        """Test marketplace command fails gracefully without Claude CLI."""
-        with patch(
-            "code_assistant_manager.cli.plugin_commands.ClaudePluginHandler"
-        ) as MockHandler:
-            handler = MagicMock()
-            handler.get_cli_path.return_value = None
-            MockHandler.return_value = handler
-
-            result = runner.invoke(marketplace_app, ["list"])
-
-        assert result.exit_code == 1
-        assert "not found" in result.output.lower()
