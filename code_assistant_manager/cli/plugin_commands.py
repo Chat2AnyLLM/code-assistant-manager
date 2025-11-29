@@ -826,9 +826,9 @@ def _display_marketplace_footer(info, marketplace: str, total: int, limit: int) 
 
 @plugin_app.command("browse")
 def browse_marketplace(
-    marketplace: str = typer.Argument(
-        ...,
-        help="Marketplace name to browse (from 'cam plugin repos')",
+    marketplace: Optional[str] = typer.Argument(
+        None,
+        help="Marketplace name to browse (from 'cam plugin repos'). If not specified, shows all plugins from all marketplaces.",
     ),
     query: Optional[str] = typer.Option(
         None,
@@ -855,9 +855,10 @@ def browse_marketplace(
         help=f"App type ({', '.join(VALID_APP_TYPES)})",
     ),
 ):
-    """Browse plugins in a configured marketplace.
+    """Browse plugins in configured marketplaces or a specific one.
 
-    Fetches the marketplace manifest from GitHub and lists all available plugins.
+    Without a marketplace name: Shows all plugins from all marketplaces and standalone plugins.
+    With a marketplace name: Fetches the marketplace manifest from GitHub and lists available plugins.
     Use --query to search by name/description, --category to filter by category.
     """
     from code_assistant_manager.plugins.fetch import fetch_repo_info
@@ -865,6 +866,93 @@ def browse_marketplace(
     app = resolve_single_app(app_type, VALID_APP_TYPES, default="claude")
     manager = PluginManager()
     handler = _get_handler(app)
+
+    # If no marketplace specified, show all plugins from all repos
+    if not marketplace:
+        typer.echo(
+            f"{Colors.CYAN}Fetching all plugins from all marketplaces and plugins...{Colors.RESET}\n"
+        )
+
+        all_repos = manager.get_all_repos()
+        if not all_repos:
+            typer.echo(
+                f"{Colors.YELLOW}No plugin repositories configured{Colors.RESET}"
+            )
+            return
+
+        all_plugins = []
+        repo_sources = {}  # Track which repo each plugin comes from
+
+        for repo_name, repo in all_repos.items():
+            if not repo.repo_owner or not repo.repo_name:
+                continue
+
+            # Fetch repo info
+            info = fetch_repo_info(
+                repo.repo_owner, repo.repo_name, repo.repo_branch or "main"
+            )
+            if not info:
+                typer.echo(
+                    f"  {Colors.YELLOW}⊘{Colors.RESET} {repo_name} (failed to fetch)"
+                )
+                continue
+
+            if info.type == "marketplace":
+                # Add plugins from marketplace with their source
+                for plugin in info.plugins:
+                    plugin["marketplace"] = repo_name
+                    repo_sources[f"{plugin.get('name', '')}@{repo_name}"] = repo_name
+                all_plugins.extend(info.plugins)
+            else:
+                # Single plugin repository
+                plugin_name = info.name
+                all_plugins.append(
+                    {
+                        "name": plugin_name,
+                        "version": info.version or "",
+                        "description": info.description or "",
+                        "category": "",
+                        "marketplace": repo_name,
+                    }
+                )
+                repo_sources[f"{plugin_name}@{repo_name}"] = repo_name
+
+        if not all_plugins:
+            typer.echo(
+                f"{Colors.YELLOW}No plugins found in configured repositories{Colors.RESET}"
+            )
+            return
+
+        # Filter and display
+        plugins = _filter_plugins(all_plugins, query, category)
+        total = len(plugins)
+        plugins = plugins[:limit]
+
+        typer.echo(f"{Colors.BOLD}All Available Plugins:{Colors.RESET}")
+        typer.echo(f"Total: {total} plugins\n")
+
+        if query or category:
+            typer.echo(f"Matching: {total}\n")
+
+        typer.echo(f"{Colors.BOLD}Plugins:{Colors.RESET}\n")
+
+        for plugin in plugins:
+            _display_plugin(plugin)
+
+        if total > limit:
+            typer.echo(f"\n  ... and {total - limit} more")
+
+        categories = {p.get("category") for p in all_plugins if p.get("category")}
+        if categories:
+            typer.echo(
+                f"\n{Colors.CYAN}Categories:{Colors.RESET} {', '.join(sorted(categories))}"
+            )
+
+        typer.echo(
+            f"\n{Colors.CYAN}Filter by marketplace:{Colors.RESET} cam plugin browse <marketplace-name>"
+        )
+        typer.echo()
+        return
 
     # Resolve marketplace to repo info
     repo_owner, repo_name, repo_branch = _resolve_marketplace_repo(
