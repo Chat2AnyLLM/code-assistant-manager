@@ -12,6 +12,10 @@ from typing import Dict, List, Optional, Type
 
 from .base import BaseAgentHandler
 from .claude import ClaudeAgentHandler
+from .codebuddy import CodebuddyAgentHandler
+from .codex import CodexAgentHandler
+from .droid import DroidAgentHandler
+from .gemini import GeminiAgentHandler
 from .models import Agent, AgentRepo
 
 logger = logging.getLogger(__name__)
@@ -56,6 +60,10 @@ DEFAULT_AGENT_REPOS = _load_builtin_agent_repos()
 # Registry of available handlers
 AGENT_HANDLERS: Dict[str, Type[BaseAgentHandler]] = {
     "claude": ClaudeAgentHandler,
+    "codex": CodexAgentHandler,
+    "gemini": GeminiAgentHandler,
+    "droid": DroidAgentHandler,
+    "codebuddy": CodebuddyAgentHandler,
 }
 
 # Valid app types for agents

@@ -12,6 +12,7 @@ from code_assistant_manager.agents import (
     AgentManager,
     AgentRepo,
 )
+from code_assistant_manager.cli.option_utils import resolve_app_targets
 from code_assistant_manager.menu.base import Colors
 from code_assistant_manager.plugins.fetch import parse_github_url
 
@@ -231,10 +232,18 @@ def install_agent(
         "claude",
         "--app",
         "-a",
-        help="App type to install to (currently only 'claude' supported)",
+        help="App type to install to (claude, codex, gemini, droid, codebuddy)",
     ),
 ):
     """Install an agent to an app's agents directory."""
+    # Validate app type
+    if app_type not in VALID_APP_TYPES:
+        typer.echo(
+            f"{Colors.RED}✗ Invalid value '{app_type}' for --app. "
+            f"Valid: {', '.join(VALID_APP_TYPES)}{Colors.RESET}"
+        )
+        raise typer.Exit(1)
+
     manager = _get_agent_manager()
 
     try:
@@ -254,11 +263,19 @@ def uninstall_agent(
         "claude",
         "--app",
         "-a",
-        help="App type to uninstall from (currently only 'claude' supported)",
+        help="App type to uninstall from (claude, codex, gemini, droid, codebuddy)",
     ),
     force: bool = typer.Option(False, "--force", "-f", help="Skip confirmation"),
 ):
     """Uninstall an agent from an app's agents directory."""
+    # Validate app type
+    if app_type not in VALID_APP_TYPES:
+        typer.echo(
+            f"{Colors.RED}✗ Invalid value '{app_type}' for --app. "
+            f"Valid: {', '.join(VALID_APP_TYPES)}{Colors.RESET}"
+        )
+        raise typer.Exit(1)
+
     manager = _get_agent_manager()
     agent = manager.get(agent_key)
 
@@ -350,57 +367,59 @@ def remove_repo(
 
 @agent_app.command("installed")
 def list_installed_agents(
-    app_type: str = typer.Option(
-        "claude",
+    app_type: Optional[str] = typer.Option(
+        None,
         "--app",
         "-a",
-        help="App type to show installed agents for",
+        help="App type(s) to show (claude, codex, gemini, droid, codebuddy, all). Default shows all.",
     ),
 ):
-    """Show installed agents."""
+    """Show installed agents for each app."""
     manager = _get_agent_manager()
-
-    try:
-        handler = manager.get_handler(app_type)
-    except ValueError as e:
-        typer.echo(f"{Colors.RED}✗ Error: {e}{Colors.RESET}")
-        raise typer.Exit(1)
-
-    agents_dir = handler.agents_dir
-    typer.echo(
-        f"\n{Colors.BOLD}{app_type.capitalize()} Agents ({agents_dir}):{Colors.RESET}"
-    )
-
-    if not agents_dir.exists():
-        typer.echo(f"  {Colors.YELLOW}No agents installed{Colors.RESET}")
-        return
-
-    installed = list(agents_dir.glob("*.md"))
-    if not installed:
-        typer.echo(f"  {Colors.YELLOW}No agents installed{Colors.RESET}")
-        return
-
     all_agents = manager.get_all()
 
-    for agent_file in sorted(installed):
-        filename = agent_file.name
+    target_apps = resolve_app_targets(
+        app_type,
+        VALID_APP_TYPES,
+        default=None,
+        fallback_to_all_if_none=True,
+    )
 
-        # Find matching agent in database
-        agent_key = None
-        for key, agent in all_agents.items():
-            if agent.filename.lower() == filename.lower():
-                agent_key = key
-                break
+    for app in target_apps:
+        try:
+            handler = manager.get_handler(app)
+        except ValueError:
+            continue
 
-        if agent_key:
-            agent = all_agents[agent_key]
-            typer.echo(
-                f"  {Colors.GREEN}✓{Colors.RESET} {agent.name} ({Colors.CYAN}{agent_key}{Colors.RESET})"
-            )
-        else:
-            typer.echo(f"  {Colors.GREEN}✓{Colors.RESET} {filename}")
+        agents_dir = handler.agents_dir
+        typer.echo(f"\n{Colors.BOLD}{app.capitalize()} ({agents_dir}):{Colors.RESET}")
 
-    typer.echo()
+        if not agents_dir.exists():
+            typer.echo(f"  {Colors.YELLOW}No agents installed{Colors.RESET}")
+            continue
+
+        installed = list(agents_dir.glob("*.md"))
+        if not installed:
+            typer.echo(f"  {Colors.YELLOW}No agents installed{Colors.RESET}")
+            continue
+
+        for agent_file in sorted(installed):
+            filename = agent_file.name
+
+            # Find matching agent in database
+            agent_key = None
+            for key, agent in all_agents.items():
+                if agent.filename.lower() == filename.lower():
+                    agent_key = key
+                    break
+
+            if agent_key:
+                agent = all_agents[agent_key]
+                typer.echo(
+                    f"  {Colors.GREEN}✓{Colors.RESET} {agent.name} ({Colors.CYAN}{agent_key}{Colors.RESET})"
+                )
+            else:
+                typer.echo(f"  {Colors.GREEN}✓{Colors.RESET} {filename}")
 
 
 @agent_app.command("uninstall-all")

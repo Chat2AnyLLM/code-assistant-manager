@@ -17,12 +17,10 @@ from unittest.mock import MagicMock, PropertyMock, patch
 import pytest
 
 from code_assistant_manager.skills.base import BaseSkillHandler
-from code_assistant_manager.skills.handlers import (
-    ClaudeSkillHandler,
-    CodexSkillHandler,
-    DroidSkillHandler,
-    GeminiSkillHandler,
-)
+from code_assistant_manager.skills.claude import ClaudeSkillHandler
+from code_assistant_manager.skills.codex import CodexSkillHandler
+from code_assistant_manager.skills.droid import DroidSkillHandler
+from code_assistant_manager.skills.gemini import GeminiSkillHandler
 from code_assistant_manager.skills.models import Skill
 
 

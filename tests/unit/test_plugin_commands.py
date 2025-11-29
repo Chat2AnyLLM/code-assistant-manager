@@ -32,14 +32,24 @@ class TestHelperFunctions:
     """Test helper functions in plugin_commands."""
 
     def test_get_handler_returns_handler(self):
-        """Test _get_handler returns ClaudePluginHandler."""
+        """Test _get_handler returns a plugin handler for the specified app."""
         with patch(
-            "code_assistant_manager.cli.plugin_commands.ClaudePluginHandler"
-        ) as MockHandler:
-            MockHandler.return_value = MagicMock()
+            "code_assistant_manager.cli.plugin_commands.get_handler"
+        ) as mock_get_handler:
+            mock_get_handler.return_value = MagicMock()
+            handler = _get_handler("claude")
+            assert handler is not None
+            mock_get_handler.assert_called_once_with("claude")
+
+    def test_get_handler_default_is_claude(self):
+        """Test _get_handler defaults to claude."""
+        with patch(
+            "code_assistant_manager.cli.plugin_commands.get_handler"
+        ) as mock_get_handler:
+            mock_get_handler.return_value = MagicMock()
             handler = _get_handler()
             assert handler is not None
-            MockHandler.assert_called_once()
+            mock_get_handler.assert_called_once_with("claude")
 
     def test_remove_plugin_from_settings_success(self, tmp_path):
         """Test removing plugin from settings.json."""
@@ -144,7 +154,7 @@ class TestPluginCommands:
             "code_assistant_manager.cli.plugin_commands._get_handler",
             return_value=mock_handler,
         ):
-            with patch("code_assistant_manager.cli.plugin_commands._check_claude_cli"):
+            with patch("code_assistant_manager.cli.plugin_commands._check_app_cli"):
                 with patch(
                     "code_assistant_manager.cli.plugin_commands.PluginManager",
                     return_value=mock_manager,
@@ -164,7 +174,7 @@ class TestPluginCommands:
             "code_assistant_manager.cli.plugin_commands._get_handler",
             return_value=mock_handler,
         ):
-            with patch("code_assistant_manager.cli.plugin_commands._check_claude_cli"):
+            with patch("code_assistant_manager.cli.plugin_commands._check_app_cli"):
                 # Use input="y\n" to confirm the prompt (workaround for Python 3.14-nogil issue with --force flag)
                 result = runner.invoke(
                     plugin_app, ["uninstall", "test-plugin"], input="y\n"
@@ -182,7 +192,7 @@ class TestPluginCommands:
             "code_assistant_manager.cli.plugin_commands._get_handler",
             return_value=mock_handler,
         ):
-            with patch("code_assistant_manager.cli.plugin_commands._check_claude_cli"):
+            with patch("code_assistant_manager.cli.plugin_commands._check_app_cli"):
                 result = runner.invoke(plugin_app, ["list"])
 
         assert result.exit_code == 0
@@ -197,7 +207,7 @@ class TestPluginCommands:
             "code_assistant_manager.cli.plugin_commands._get_handler",
             return_value=mock_handler,
         ):
-            with patch("code_assistant_manager.cli.plugin_commands._check_claude_cli"):
+            with patch("code_assistant_manager.cli.plugin_commands._check_app_cli"):
                 with patch(
                     "code_assistant_manager.cli.plugin_commands._set_plugin_enabled",
                     return_value=True,
@@ -216,7 +226,7 @@ class TestPluginCommands:
             "code_assistant_manager.cli.plugin_commands._get_handler",
             return_value=mock_handler,
         ):
-            with patch("code_assistant_manager.cli.plugin_commands._check_claude_cli"):
+            with patch("code_assistant_manager.cli.plugin_commands._check_app_cli"):
                 with patch(
                     "code_assistant_manager.cli.plugin_commands._set_plugin_enabled",
                     return_value=True,
@@ -235,7 +245,7 @@ class TestPluginCommands:
             "code_assistant_manager.cli.plugin_commands._get_handler",
             return_value=mock_handler,
         ):
-            with patch("code_assistant_manager.cli.plugin_commands._check_claude_cli"):
+            with patch("code_assistant_manager.cli.plugin_commands._check_app_cli"):
                 result = runner.invoke(plugin_app, ["validate", "test-plugin"])
 
         assert result.exit_code == 0

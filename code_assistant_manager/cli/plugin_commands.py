@@ -1,6 +1,6 @@
-"""CLI commands for Claude Code plugin management.
+"""CLI commands for plugin management.
 
-Uses the `claude` CLI to manage plugins and marketplaces.
+Uses the app-specific CLI (e.g., `claude`) to manage plugins and marketplaces.
 """
 
 import logging
@@ -9,36 +9,39 @@ from typing import Optional
 
 import typer
 
+from code_assistant_manager.cli.option_utils import resolve_single_app
 from code_assistant_manager.menu.base import Colors
 from code_assistant_manager.plugins import (
     BUILTIN_PLUGIN_REPOS,
+    PLUGIN_HANDLERS,
     VALID_APP_TYPES,
     PluginManager,
     PluginRepo,
     fetch_repo_info_from_url,
+    get_handler,
     parse_github_url,
 )
-from code_assistant_manager.plugins.claude import ClaudePluginHandler
+from code_assistant_manager.plugins.base import BasePluginHandler
 
 logger = logging.getLogger(__name__)
 
 plugin_app = typer.Typer(
-    help="Manage Claude Code plugins and marketplaces (currently only supports Claude Code, uses 'claude' CLI)",
+    help="Manage plugins and marketplaces for AI assistants (Claude, Codex, Gemini, Droid, CodeBuddy)",
     no_args_is_help=True,
 )
 
 
-def _get_handler() -> ClaudePluginHandler:
-    """Get Claude plugin handler instance."""
-    return ClaudePluginHandler()
+def _get_handler(app_type: str = "claude") -> BasePluginHandler:
+    """Get plugin handler instance for the specified app type."""
+    return get_handler(app_type)
 
 
-def _check_claude_cli():
-    """Check if Claude CLI is available."""
-    handler = _get_handler()
+def _check_app_cli(app_type: str = "claude"):
+    """Check if app CLI is available."""
+    handler = _get_handler(app_type)
     if not handler.get_cli_path():
         typer.echo(
-            f"{Colors.RED}✗ Claude CLI not found. Please install Claude Code first.{Colors.RESET}"
+            f"{Colors.RED}✗ {app_type.capitalize()} CLI not found. Please install {app_type.capitalize()} first.{Colors.RESET}"
         )
         raise typer.Exit(1)
 
@@ -58,10 +61,17 @@ def install_plugin(
         "-m",
         help="Marketplace name (alternative to plugin@marketplace format)",
     ),
+    app_type: str = typer.Option(
+        "claude",
+        "--app",
+        "-a",
+        help=f"App type to install to ({', '.join(VALID_APP_TYPES)})",
+    ),
 ):
     """Install a plugin from available marketplaces or add a built-in marketplace."""
-    _check_claude_cli()
-    handler = _get_handler()
+    app = resolve_single_app(app_type, VALID_APP_TYPES, default="claude")
+    _check_app_cli(app)
+    handler = _get_handler(app)
     manager = PluginManager()
 
     # Check if it's a configured repo (user repos take precedence over builtin)
@@ -76,7 +86,7 @@ def install_plugin(
             if success:
                 typer.echo(f"{Colors.GREEN}✓ Marketplace added: {plugin}{Colors.RESET}")
                 typer.echo(
-                    f"\n{Colors.CYAN}Browse plugins with:{Colors.RESET} cam plugin search --marketplace {plugin}"
+                    f"\n{Colors.CYAN}Browse plugins with:{Colors.RESET} cam plugin browse {plugin}"
                 )
                 typer.echo(
                     f"{Colors.CYAN}Install plugins with:{Colors.RESET} cam plugin install <plugin-name>@{plugin}"
@@ -86,7 +96,7 @@ def install_plugin(
                     f"{Colors.YELLOW}Marketplace '{plugin}' is already installed.{Colors.RESET}"
                 )
                 typer.echo(
-                    f"\n{Colors.CYAN}Browse plugins with:{Colors.RESET} cam plugin search --marketplace {plugin}"
+                    f"\n{Colors.CYAN}Browse plugins with:{Colors.RESET} cam plugin browse {plugin}"
                 )
             else:
                 typer.echo(
@@ -133,14 +143,21 @@ def install_plugin(
 def uninstall_plugin(
     plugin: str = typer.Argument(..., help="Plugin name to uninstall"),
     force: bool = typer.Option(False, "--force", "-f", help="Skip confirmation"),
+    app_type: str = typer.Option(
+        "claude",
+        "--app",
+        "-a",
+        help=f"App type to uninstall from ({', '.join(VALID_APP_TYPES)})",
+    ),
 ):
     """Uninstall an installed plugin.
 
     For marketplace plugins, this removes the plugin from enabled plugins settings.
-    For standalone plugins, this uses Claude CLI to fully uninstall.
+    For standalone plugins, this uses the app's CLI to fully uninstall.
     """
-    _check_claude_cli()
-    handler = _get_handler()
+    app = resolve_single_app(app_type, VALID_APP_TYPES, default="claude")
+    _check_app_cli(app)
+    handler = _get_handler(app)
 
     if not force:
         typer.confirm(f"Uninstall plugin '{plugin}'?", abort=True)
@@ -281,10 +298,17 @@ def _set_plugin_enabled(handler, plugin: str, enabled: bool) -> bool:
 @plugin_app.command("enable")
 def enable_plugin(
     plugin: str = typer.Argument(..., help="Plugin name to enable"),
+    app_type: str = typer.Option(
+        "claude",
+        "--app",
+        "-a",
+        help=f"App type ({', '.join(VALID_APP_TYPES)})",
+    ),
 ):
     """Enable a disabled plugin."""
-    _check_claude_cli()
-    handler = _get_handler()
+    app = resolve_single_app(app_type, VALID_APP_TYPES, default="claude")
+    _check_app_cli(app)
+    handler = _get_handler(app)
 
     typer.echo(f"{Colors.CYAN}Enabling plugin: {plugin}...{Colors.RESET}")
     success, msg = handler.enable_plugin(plugin)
@@ -316,10 +340,17 @@ def enable_plugin(
 @plugin_app.command("disable")
 def disable_plugin(
     plugin: str = typer.Argument(..., help="Plugin name to disable"),
+    app_type: str = typer.Option(
+        "claude",
+        "--app",
+        "-a",
+        help=f"App type ({', '.join(VALID_APP_TYPES)})",
+    ),
 ):
     """Disable an enabled plugin."""
-    _check_claude_cli()
-    handler = _get_handler()
+    app = resolve_single_app(app_type, VALID_APP_TYPES, default="claude")
+    _check_app_cli(app)
+    handler = _get_handler(app)
 
     typer.echo(f"{Colors.CYAN}Disabling plugin: {plugin}...{Colors.RESET}")
     success, msg = handler.disable_plugin(plugin)
@@ -351,10 +382,17 @@ def disable_plugin(
 @plugin_app.command("validate")
 def validate_plugin(
     path: str = typer.Argument(..., help="Path to plugin or marketplace to validate"),
+    app_type: str = typer.Option(
+        "claude",
+        "--app",
+        "-a",
+        help=f"App type ({', '.join(VALID_APP_TYPES)})",
+    ),
 ):
     """Validate a plugin or marketplace manifest."""
-    _check_claude_cli()
-    handler = _get_handler()
+    app = resolve_single_app(app_type, VALID_APP_TYPES, default="claude")
+    _check_app_cli(app)
+    handler = _get_handler(app)
 
     typer.echo(f"{Colors.CYAN}Validating: {path}...{Colors.RESET}")
     success, msg = handler.validate_plugin(path)
@@ -371,13 +409,19 @@ def list_plugins(
     show_all: bool = typer.Option(
         False,
         "--all",
-        "-a",
         help="Show all plugins from marketplaces (not just enabled)",
+    ),
+    app_type: str = typer.Option(
+        "claude",
+        "--app",
+        "-a",
+        help=f"App type ({', '.join(VALID_APP_TYPES)})",
     ),
 ):
     """List installed/enabled plugins."""
-    _check_claude_cli()
-    handler = _get_handler()
+    app = resolve_single_app(app_type, VALID_APP_TYPES, default="claude")
+    _check_app_cli(app)
+    handler = _get_handler(app)
 
     # Get enabled plugins from settings
     enabled_plugins = handler.get_enabled_plugins()
@@ -588,7 +632,7 @@ def remove_repo(
 # ==================== Marketplace Subcommand ====================
 
 marketplace_app = typer.Typer(
-    help="Manage installed Claude Code marketplaces",
+    help="Manage installed marketplaces",
     no_args_is_help=True,
 )
 
@@ -598,6 +642,12 @@ def marketplace_update(
     name: Optional[str] = typer.Argument(
         None,
         help="Marketplace name to update (updates all if not specified)",
+    ),
+    app_type: str = typer.Option(
+        "claude",
+        "--app",
+        "-a",
+        help=f"App type ({', '.join(VALID_APP_TYPES)})",
     ),
 ):
     """Update installed marketplace(s) from their source.
@@ -610,8 +660,9 @@ def marketplace_update(
         cam plugin marketplace update                    # Update all marketplaces
         cam plugin marketplace update my-marketplace     # Update specific marketplace
     """
-    _check_claude_cli()
-    handler = _get_handler()
+    app = resolve_single_app(app_type, VALID_APP_TYPES, default="claude")
+    _check_app_cli(app)
+    handler = _get_handler(app)
 
     if name:
         typer.echo(f"{Colors.CYAN}Updating marketplace: {name}...{Colors.RESET}")
@@ -635,7 +686,7 @@ plugin_app.add_typer(marketplace_app, name="marketplace")
 
 
 def _resolve_marketplace_repo(
-    manager: PluginManager, handler: ClaudePluginHandler, marketplace: str
+    manager: PluginManager, handler: BasePluginHandler, marketplace: str
 ) -> tuple[Optional[str], Optional[str], str]:
     """Resolve marketplace name to repo owner/name/branch.
 
@@ -647,14 +698,14 @@ def _resolve_marketplace_repo(
     if repo and repo.repo_owner and repo.repo_name:
         return repo.repo_owner, repo.repo_name, repo.repo_branch
 
-    # Try Claude's known marketplaces as fallback
+    # Try app's known marketplaces as fallback
     return _resolve_from_known_marketplaces(handler, marketplace)
 
 
 def _resolve_from_known_marketplaces(
-    handler: ClaudePluginHandler, marketplace: str
+    handler: BasePluginHandler, marketplace: str
 ) -> tuple[Optional[str], Optional[str], str]:
-    """Fallback resolution from Claude's known_marketplaces.json."""
+    """Fallback resolution from app's known_marketplaces.json."""
     import json
 
     known_file = handler.known_marketplaces_file
@@ -706,7 +757,7 @@ def _filter_plugins(
 
 
 def _display_marketplace_not_found(
-    manager: PluginManager, handler: ClaudePluginHandler, marketplace: str
+    manager: PluginManager, handler: BasePluginHandler, marketplace: str
 ) -> None:
     """Display error message when marketplace is not found."""
     typer.echo(
@@ -797,6 +848,12 @@ def browse_marketplace(
         "-n",
         help="Maximum number of plugins to show",
     ),
+    app_type: str = typer.Option(
+        "claude",
+        "--app",
+        "-a",
+        help=f"App type ({', '.join(VALID_APP_TYPES)})",
+    ),
 ):
     """Browse plugins in a configured marketplace.
 
@@ -805,8 +862,9 @@ def browse_marketplace(
     """
     from code_assistant_manager.plugins.fetch import fetch_repo_info
 
+    app = resolve_single_app(app_type, VALID_APP_TYPES, default="claude")
     manager = PluginManager()
-    handler = _get_handler()
+    handler = _get_handler(app)
 
     # Resolve marketplace to repo info
     repo_owner, repo_name, repo_branch = _resolve_marketplace_repo(
@@ -1011,12 +1069,20 @@ def fetch_repo(
 
 
 @plugin_app.command("info")
-def plugin_info():
-    """Show Claude Code plugin system information."""
-    handler = _get_handler()
+def plugin_info(
+    app_type: str = typer.Option(
+        "claude",
+        "--app",
+        "-a",
+        help=f"App type ({', '.join(VALID_APP_TYPES)})",
+    ),
+):
+    """Show plugin system information for an app."""
+    app = resolve_single_app(app_type, VALID_APP_TYPES, default="claude")
+    handler = _get_handler(app)
     manager = PluginManager()
 
-    typer.echo(f"\n{Colors.BOLD}Claude Code Plugin System:{Colors.RESET}\n")
+    typer.echo(f"\n{Colors.BOLD}{app.capitalize()} Plugin System:{Colors.RESET}\n")
 
     # Show paths
     typer.echo(f"{Colors.CYAN}Configuration:{Colors.RESET}")
@@ -1048,7 +1114,7 @@ def plugin_info():
     status = (
         f"{Colors.GREEN}✓{Colors.RESET}" if cli_path else f"{Colors.RED}✗{Colors.RESET}"
     )
-    typer.echo(f"  {status} Claude CLI: {cli_path or 'Not found'}")
+    typer.echo(f"  {status} {app.capitalize()} CLI: {cli_path or 'Not found'}")
 
     # Get configured repos from CAM
     all_repos = manager.get_all_repos()
@@ -1078,10 +1144,10 @@ def plugin_info():
             else:
                 typer.echo(f"  • {name}")
 
-    # Show installed marketplaces (from Claude CLI)
+    # Show installed marketplaces (from app)
     installed_marketplaces = handler.get_known_marketplaces()
     typer.echo(
-        f"\n{Colors.CYAN}Installed Marketplaces (Claude):{Colors.RESET} {len(installed_marketplaces)}"
+        f"\n{Colors.CYAN}Installed Marketplaces ({app.capitalize()}):{Colors.RESET} {len(installed_marketplaces)}"
     )
     for name, info in sorted(installed_marketplaces.items()):
         source = info.get("source", {})
@@ -1101,7 +1167,7 @@ def plugin_info():
     disabled_plugins = {k: v for k, v in enabled.items() if not v}
 
     typer.echo(
-        f"\n{Colors.CYAN}Installed Plugins (Claude):{Colors.RESET} {len(enabled_plugins)} enabled, {len(disabled_plugins)} disabled"
+        f"\n{Colors.CYAN}Installed Plugins ({app.capitalize()}):{Colors.RESET} {len(enabled_plugins)} enabled, {len(disabled_plugins)} disabled"
     )
 
     if enabled_plugins:

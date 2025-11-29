@@ -8,12 +8,16 @@ Plugins are installed from GitHub repositories or local directories.
 
 from .base import BasePluginHandler
 from .claude import ClaudePluginHandler
+from .codebuddy import CodebuddyPluginHandler
+from .codex import CodexPluginHandler
+from .droid import DroidPluginHandler
 from .fetch import (
     FetchedRepoInfo,
     fetch_repo_info,
     fetch_repo_info_from_url,
     parse_github_url,
 )
+from .gemini import GeminiPluginHandler
 from .manager import (
     BUILTIN_PLUGIN_REPOS,
     PLUGIN_HANDLERS,
@@ -32,6 +36,10 @@ __all__ = [
     "BasePluginHandler",
     # App-specific handlers
     "ClaudePluginHandler",
+    "CodexPluginHandler",
+    "GeminiPluginHandler",
+    "DroidPluginHandler",
+    "CodebuddyPluginHandler",
     # Manager
     "PluginManager",
     "get_handler",

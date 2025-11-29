@@ -1,4 +1,4 @@
-"""Claude plugin handler."""
+"""CodeBuddy plugin handler."""
 
 import json
 import logging
@@ -12,23 +12,23 @@ from .models import Plugin
 logger = logging.getLogger(__name__)
 
 
-class ClaudePluginHandler(BasePluginHandler):
-    """Plugin handler for Claude Code.
+class CodebuddyPluginHandler(BasePluginHandler):
+    """Plugin handler for CodeBuddy CLI.
 
-    Uses the `claude` CLI to manage plugins and marketplaces.
+    Uses the `codebuddy` CLI to manage plugins and marketplaces.
 
-    User-level plugins: ~/.claude/plugins/
-    Marketplaces: ~/.claude/plugins/marketplaces/
-    Settings file: ~/.claude/settings.json
+    User-level plugins: ~/.codebuddy/plugins/
+    Marketplaces: ~/.codebuddy/plugins/marketplaces/
+    Settings file: ~/.codebuddy/settings.json
     """
 
     @property
     def app_name(self) -> str:
-        return "claude"
+        return "codebuddy"
 
     @property
     def _default_home_dir(self) -> Path:
-        return Path.home() / ".claude"
+        return Path.home() / ".codebuddy"
 
     @property
     def _default_user_plugins_dir(self) -> Path:
@@ -40,7 +40,7 @@ class ClaudePluginHandler(BasePluginHandler):
 
     @property
     def plugin_manifest_path(self) -> str:
-        return ".claude-plugin/plugin.json"
+        return ".codebuddy-plugin/plugin.json"
 
     @property
     def manifest_name_field(self) -> str:
@@ -56,13 +56,13 @@ class ClaudePluginHandler(BasePluginHandler):
         """Return the known marketplaces file."""
         return self.user_plugins_dir / "known_marketplaces.json"
 
-    def _run_claude_cli(self, *args: str) -> Tuple[int, str, str]:
-        """Run a claude CLI command.
+    def _run_codebuddy_cli(self, *args: str) -> Tuple[int, str, str]:
+        """Run a codebuddy CLI command.
 
         Returns:
             Tuple of (return_code, stdout, stderr)
         """
-        cmd = ["claude", "plugin", *args]
+        cmd = ["codebuddy", "plugin", *args]
         logger.debug(f"Running: {' '.join(cmd)}")
         try:
             result = subprocess.run(
@@ -73,14 +73,18 @@ class ClaudePluginHandler(BasePluginHandler):
             )
             return result.returncode, result.stdout, result.stderr
         except FileNotFoundError:
-            return -1, "", "Claude CLI not found. Please install Claude Code first."
+            return (
+                -1,
+                "",
+                "CodeBuddy CLI not found. Please install CodeBuddy first.",
+            )
         except subprocess.TimeoutExpired:
             return -1, "", "Command timed out"
 
     # ==================== Marketplace Operations ====================
 
     def marketplace_add(self, source: str) -> Tuple[bool, str]:
-        """Add a marketplace using Claude CLI.
+        """Add a marketplace using CodeBuddy CLI.
 
         Args:
             source: URL, path, or GitHub repo (e.g., "owner/repo")
@@ -88,13 +92,13 @@ class ClaudePluginHandler(BasePluginHandler):
         Returns:
             Tuple of (success, message)
         """
-        code, stdout, stderr = self._run_claude_cli("marketplace", "add", source)
+        code, stdout, stderr = self._run_codebuddy_cli("marketplace", "add", source)
         if code == 0:
             return True, stdout.strip() or f"Marketplace added: {source}"
         return False, stderr.strip() or stdout.strip() or "Failed to add marketplace"
 
     def marketplace_remove(self, name: str) -> Tuple[bool, str]:
-        """Remove a marketplace using Claude CLI.
+        """Remove a marketplace using CodeBuddy CLI.
 
         Args:
             name: Marketplace name
@@ -102,24 +106,24 @@ class ClaudePluginHandler(BasePluginHandler):
         Returns:
             Tuple of (success, message)
         """
-        code, stdout, stderr = self._run_claude_cli("marketplace", "remove", name)
+        code, stdout, stderr = self._run_codebuddy_cli("marketplace", "remove", name)
         if code == 0:
             return True, stdout.strip() or f"Marketplace removed: {name}"
         return False, stderr.strip() or stdout.strip() or "Failed to remove marketplace"
 
     def marketplace_list(self) -> Tuple[bool, str]:
-        """List all marketplaces using Claude CLI.
+        """List all marketplaces using CodeBuddy CLI.
 
         Returns:
             Tuple of (success, output)
         """
-        code, stdout, stderr = self._run_claude_cli("marketplace", "list")
+        code, stdout, stderr = self._run_codebuddy_cli("marketplace", "list")
         if code == 0:
             return True, stdout.strip()
         return False, stderr.strip() or stdout.strip() or "Failed to list marketplaces"
 
     def marketplace_update(self, name: Optional[str] = None) -> Tuple[bool, str]:
-        """Update marketplace(s) using Claude CLI.
+        """Update marketplace(s) using CodeBuddy CLI.
 
         Args:
             name: Marketplace name (updates all if None)
@@ -130,7 +134,7 @@ class ClaudePluginHandler(BasePluginHandler):
         args = ["marketplace", "update"]
         if name:
             args.append(name)
-        code, stdout, stderr = self._run_claude_cli(*args)
+        code, stdout, stderr = self._run_codebuddy_cli(*args)
         if code == 0:
             return True, stdout.strip() or "Marketplaces updated"
         return (
@@ -159,7 +163,7 @@ class ClaudePluginHandler(BasePluginHandler):
     def install_plugin(
         self, plugin: str, marketplace: Optional[str] = None
     ) -> Tuple[bool, str]:
-        """Install a plugin using Claude CLI.
+        """Install a plugin using CodeBuddy CLI.
 
         Args:
             plugin: Plugin name
@@ -169,13 +173,13 @@ class ClaudePluginHandler(BasePluginHandler):
             Tuple of (success, message)
         """
         plugin_ref = f"{plugin}@{marketplace}" if marketplace else plugin
-        code, stdout, stderr = self._run_claude_cli("install", plugin_ref)
+        code, stdout, stderr = self._run_codebuddy_cli("install", plugin_ref)
         if code == 0:
             return True, stdout.strip() or f"Plugin installed: {plugin_ref}"
         return False, stderr.strip() or stdout.strip() or "Failed to install plugin"
 
     def uninstall_plugin(self, plugin: str) -> Tuple[bool, str]:
-        """Uninstall a plugin using Claude CLI.
+        """Uninstall a plugin using CodeBuddy CLI.
 
         Args:
             plugin: Plugin name
@@ -183,13 +187,13 @@ class ClaudePluginHandler(BasePluginHandler):
         Returns:
             Tuple of (success, message)
         """
-        code, stdout, stderr = self._run_claude_cli("uninstall", plugin)
+        code, stdout, stderr = self._run_codebuddy_cli("uninstall", plugin)
         if code == 0:
             return True, stdout.strip() or f"Plugin uninstalled: {plugin}"
         return False, stderr.strip() or stdout.strip() or "Failed to uninstall plugin"
 
     def enable_plugin(self, plugin: str) -> Tuple[bool, str]:
-        """Enable a plugin using Claude CLI.
+        """Enable a plugin using CodeBuddy CLI.
 
         Args:
             plugin: Plugin name
@@ -197,13 +201,13 @@ class ClaudePluginHandler(BasePluginHandler):
         Returns:
             Tuple of (success, message)
         """
-        code, stdout, stderr = self._run_claude_cli("enable", plugin)
+        code, stdout, stderr = self._run_codebuddy_cli("enable", plugin)
         if code == 0:
             return True, stdout.strip() or f"Plugin enabled: {plugin}"
         return False, stderr.strip() or stdout.strip() or "Failed to enable plugin"
 
     def disable_plugin(self, plugin: str) -> Tuple[bool, str]:
-        """Disable a plugin using Claude CLI.
+        """Disable a plugin using CodeBuddy CLI.
 
         Args:
             plugin: Plugin name
@@ -211,7 +215,7 @@ class ClaudePluginHandler(BasePluginHandler):
         Returns:
             Tuple of (success, message)
         """
-        code, stdout, stderr = self._run_claude_cli("disable", plugin)
+        code, stdout, stderr = self._run_codebuddy_cli("disable", plugin)
         if code == 0:
             return True, stdout.strip() or f"Plugin disabled: {plugin}"
         return False, stderr.strip() or stdout.strip() or "Failed to disable plugin"
@@ -225,7 +229,7 @@ class ClaudePluginHandler(BasePluginHandler):
         Returns:
             Tuple of (success, message)
         """
-        code, stdout, stderr = self._run_claude_cli("validate", path)
+        code, stdout, stderr = self._run_codebuddy_cli("validate", path)
         if code == 0:
             return True, stdout.strip() or "Plugin is valid"
         return False, stderr.strip() or stdout.strip() or "Validation failed"
@@ -268,7 +272,7 @@ class ClaudePluginHandler(BasePluginHandler):
             if not plugins_dir.exists():
                 continue
 
-            # Recursively find all plugin directories (they contain .claude-plugin/)
+            # Recursively find all plugin directories (they contain .codebuddy-plugin/)
             def scan_dir(directory: Path):
                 for item in directory.iterdir():
                     if not item.is_dir():

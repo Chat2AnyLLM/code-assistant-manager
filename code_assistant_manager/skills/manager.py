@@ -11,12 +11,11 @@ from pathlib import Path
 from typing import Dict, List, Optional, Type
 
 from .base import BaseSkillHandler
-from .handlers import (
-    ClaudeSkillHandler,
-    CodexSkillHandler,
-    DroidSkillHandler,
-    GeminiSkillHandler,
-)
+from .claude import ClaudeSkillHandler
+from .codebuddy import CodebuddySkillHandler
+from .codex import CodexSkillHandler
+from .droid import DroidSkillHandler
+from .gemini import GeminiSkillHandler
 from .models import Skill, SkillRepo
 
 logger = logging.getLogger(__name__)
@@ -71,6 +70,7 @@ SKILL_HANDLERS: Dict[str, Type[BaseSkillHandler]] = {
     "codex": CodexSkillHandler,
     "gemini": GeminiSkillHandler,
     "droid": DroidSkillHandler,
+    "codebuddy": CodebuddySkillHandler,
 }
 
 # Valid app types for skills

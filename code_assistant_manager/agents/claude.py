@@ -1,4 +1,4 @@
-"""Claude-specific agent handler."""
+"""Claude agent handler."""
 
 from pathlib import Path
 

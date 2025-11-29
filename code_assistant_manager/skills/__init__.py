@@ -6,15 +6,15 @@ Skills are downloaded from GitHub repositories and installed to:
 - Codex: ~/.codex/skills/
 - Gemini: ~/.gemini/skills/
 - Droid: ~/.factory/skills/
+- CodeBuddy: ~/.codebuddy/skills/
 """
 
 from .base import BaseSkillHandler
-from .handlers import (
-    ClaudeSkillHandler,
-    CodexSkillHandler,
-    DroidSkillHandler,
-    GeminiSkillHandler,
-)
+from .claude import ClaudeSkillHandler
+from .codebuddy import CodebuddySkillHandler
+from .codex import CodexSkillHandler
+from .droid import DroidSkillHandler
+from .gemini import GeminiSkillHandler
 from .manager import VALID_APP_TYPES, SkillManager
 from .models import Skill, SkillRepo
 
@@ -27,5 +27,6 @@ __all__ = [
     "CodexSkillHandler",
     "GeminiSkillHandler",
     "DroidSkillHandler",
+    "CodebuddySkillHandler",
     "VALID_APP_TYPES",
 ]
