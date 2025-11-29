@@ -6,125 +6,35 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from .base import MCPBase, print_squared_frame
+from .batch_operations import _batch_operation_with_scope
 
-# ============================================================================
-# Config File Handling Helpers
-# ============================================================================
-
-# Common MCP server config key names in different config formats
-MCP_SERVER_KEYS = ["mcpServers", "servers", "mcp_servers"]
-
-
-def _load_config_file(config_path: Path) -> Tuple[Optional[dict], bool]:
-    """
-    Load a config file (JSON or TOML).
-
-    Returns:
-        Tuple of (config_dict or None, is_toml)
-    """
-    is_toml = config_path.suffix == ".toml"
-
-    if not config_path.exists():
-        return {}, is_toml
-
-    try:
-        if is_toml:
-            import tomllib
-
-            with open(config_path, "rb") as f:
-                return tomllib.load(f), is_toml
-        else:
-            with open(config_path, "r") as f:
-                return json.load(f), is_toml
-    except Exception:
-        return None, is_toml
-
-
-def _save_config_file(config_path: Path, config: dict, is_toml: bool) -> bool:
-    """Save a config dict to file (JSON or TOML)."""
-    try:
-        config_path.parent.mkdir(parents=True, exist_ok=True)
-        if is_toml:
-            import tomli_w
-
-            with open(config_path, "wb") as f:
-                tomli_w.dump(config, f)
-        else:
-            with open(config_path, "w") as f:
-                json.dump(config, f, indent=2)
-        return True
-    except Exception:
-        return False
-
-
-def _find_server_container(
-    config: dict, server_name: str
-) -> Optional[Tuple[str, dict]]:
-    """
-    Find which container (mcpServers, servers, etc.) holds a server.
-
-    Returns:
-        Tuple of (container_key, container_dict) or None if not found
-    """
-    for key in MCP_SERVER_KEYS:
-        if key in config and isinstance(config[key], dict):
-            if server_name in config[key]:
-                return key, config[key]
-
-    # Check direct entry
-    if server_name in config and isinstance(config[server_name], dict):
-        return None, config  # None key means direct entry
-
-    return None
-
-
-def _server_exists_in_config(config: dict, server_name: str) -> bool:
-    """Check if a server already exists in any config structure."""
-    for key in MCP_SERVER_KEYS:
-        if key in config and isinstance(config[key], dict):
-            if server_name in config[key]:
-                return True
-
-    # Check direct entry
-    if server_name in config and isinstance(config[server_name], dict):
-        return True
-
-    return False
-
-
-def _get_preferred_container_key(config: dict, is_toml: bool) -> str:
-    """Get the preferred container key for adding new servers."""
-    # Prefer existing containers
-    for key in MCP_SERVER_KEYS:
-        if key in config and isinstance(config[key], dict):
-            return key
-
-    # Default based on file type
-    return "mcp_servers" if is_toml else "mcpServers"
-
-
-def _remove_server_from_containers(config: dict, server_name: str) -> bool:
-    """
-    Remove a server from all containers in a config dict.
-
-    Returns:
-        True if any server was removed, False otherwise
-    """
-    modified = False
-
-    # Check all MCP server container keys
-    for key in MCP_SERVER_KEYS:
-        if key in config and isinstance(config[key], dict):
-            if server_name in config[key]:
-                del config[key][server_name]
-                modified = True
-
-    # Check for direct server entry
-    if server_name in config and isinstance(config[server_name], dict):
-        del config[server_name]
-        modified = True
-
-    return modified
+# Import from the new modules
+from .config_helpers import (
+    _find_server_container,
+    _get_preferred_container_key,
+    _load_config_file,
+    _remove_server_from_containers,
+    _save_config_file,
+    _server_exists_in_config,
+)
+from .config_paths import _get_config_locations
+from .format_converters import (
+    _convert_server_to_command_format,
+    _convert_server_to_stdio_format,
+)
+from .registry_integration import (
+    _build_commands_for_tool_from_schema,
+    _convert_schema_to_client_format,
+    _generate_config_from_registry,
+    _is_compatible_with_client,
+    _select_best_installation_method,
+)
+from .server_installation import (
+    _check_and_install_server,
+    _execute_remove_command,
+    _fallback_add_server,
+    _fallback_remove_server,
+)
 
 
 class MCPClient(MCPBase):
@@ -1099,72 +1009,8 @@ class MCPClient(MCPBase):
 
     def _get_config_locations(self, tool_name: str):
         """Get possible MCP configuration file locations for a tool."""
-
-        locations = []
-        home = Path.home()
-
-        # Common config directory patterns
-        config_patterns = [
-            home / ".config" / tool_name.capitalize() / "mcp.json",
-            home / ".config" / tool_name / "mcp.json",
-            home / ".local" / "share" / tool_name.capitalize() / "mcp.json",
-            home / ".local" / "share" / tool_name / "mcp.json",
-            home / f".{tool_name}" / "mcp.json",
-            home / f".{tool_name}.config" / "mcp.json",
-        ]
-
-        # Tool-specific locations
-        tool_specific = {
-            "cursor": [home / ".cursor" / "mcp.json"],
-            "claude": [
-                home / ".config" / "Claude" / "mcp.json",
-                home / ".local" / "share" / "claude" / "mcp.json",
-                home / "Library" / "Application Support" / "Claude" / "mcp.json",
-            ],
-            "gemini": [
-                home / ".config" / "Google" / "Gemini" / "mcp.json",
-                home / ".gemini" / "mcp.json",
-                home / ".gemini" / "settings.json",
-                Path.cwd() / ".gemini" / "settings.json",
-            ],
-            "copilot": [
-                home / ".copilot" / "mcp-config.json",
-                home / ".copilot" / "mcp.json",
-                home / ".config" / "GitHub" / "Copilot" / "mcp.json",
-            ],
-            "codex": [
-                home / ".config" / "GitHub" / "Codex" / "mcp.json",
-                home / ".codex" / "mcp.json",
-            ],
-        }
-
-        # Add tool-specific locations if available
-        if tool_name in tool_specific:
-            locations.extend(tool_specific[tool_name])
-
-        # Add common patterns
-        locations.extend(config_patterns)
-
-        # Add project-level configs (check current directory and parent directories)
-        try:
-            current_dir = Path.cwd()
-            for _ in range(5):  # Check up to 5 levels up
-                # Common project config files
-                project_configs = [
-                    current_dir / ".mcp.json",
-                    current_dir / ".gemini" / "settings.json",
-                    current_dir / "mcp.json",
-                ]
-                for config in project_configs:
-                    if config.exists():
-                        locations.append(config)
-                current_dir = current_dir.parent
-                if current_dir == current_dir.parent:  # Reached root
-                    break
-        except:
-            pass
-
-        return locations
+        # Use the centralized config paths function
+        return _get_config_locations(tool_name)
 
     def _remove_server_from_config(self, config_path: Path, server_name: str) -> bool:
         """Remove a server from a specific MCP config file."""

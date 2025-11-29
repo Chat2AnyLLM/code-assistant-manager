@@ -7,11 +7,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 from typer.testing import CliRunner
 
-from code_assistant_manager.cli.plugin_commands import (
+from code_assistant_manager.cli.plugin_commands import plugin_app
+from code_assistant_manager.cli.plugins.plugin_install_commands import (
     _get_handler,
     _remove_plugin_from_settings,
     _set_plugin_enabled,
-    plugin_app,
 )
 
 
@@ -34,7 +34,7 @@ class TestHelperFunctions:
     def test_get_handler_returns_handler(self):
         """Test _get_handler returns a plugin handler for the specified app."""
         with patch(
-            "code_assistant_manager.cli.plugin_commands.get_handler"
+            "code_assistant_manager.cli.plugins.plugin_install_commands.get_handler"
         ) as mock_get_handler:
             mock_get_handler.return_value = MagicMock()
             handler = _get_handler("claude")
@@ -44,7 +44,7 @@ class TestHelperFunctions:
     def test_get_handler_default_is_claude(self):
         """Test _get_handler defaults to claude."""
         with patch(
-            "code_assistant_manager.cli.plugin_commands.get_handler"
+            "code_assistant_manager.cli.plugins.plugin_install_commands.get_handler"
         ) as mock_get_handler:
             mock_get_handler.return_value = MagicMock()
             handler = _get_handler()
@@ -151,12 +151,14 @@ class TestPluginCommands:
         mock_manager.get_repo.return_value = None
 
         with patch(
-            "code_assistant_manager.cli.plugin_commands._get_handler",
+            "code_assistant_manager.cli.plugins.plugin_install_commands._get_handler",
             return_value=mock_handler,
         ):
-            with patch("code_assistant_manager.cli.plugin_commands._check_app_cli"):
+            with patch(
+                "code_assistant_manager.cli.plugins.plugin_install_commands._check_app_cli"
+            ):
                 with patch(
-                    "code_assistant_manager.cli.plugin_commands.PluginManager",
+                    "code_assistant_manager.cli.plugins.plugin_install_commands.PluginManager",
                     return_value=mock_manager,
                 ):
                     result = runner.invoke(plugin_app, ["install", "test-plugin"])
@@ -171,10 +173,12 @@ class TestPluginCommands:
         mock_handler.uninstall_plugin.return_value = (True, "Plugin uninstalled")
 
         with patch(
-            "code_assistant_manager.cli.plugin_commands._get_handler",
+            "code_assistant_manager.cli.plugins.plugin_install_commands._get_handler",
             return_value=mock_handler,
         ):
-            with patch("code_assistant_manager.cli.plugin_commands._check_app_cli"):
+            with patch(
+                "code_assistant_manager.cli.plugins.plugin_install_commands._check_app_cli"
+            ):
                 # Use input="y\n" to confirm the prompt (workaround for Python 3.14-nogil issue with --force flag)
                 result = runner.invoke(
                     plugin_app, ["uninstall", "test-plugin"], input="y\n"
@@ -189,10 +193,12 @@ class TestPluginCommands:
         mock_handler.get_enabled_plugins.return_value = {"plugin1@marketplace": True}
 
         with patch(
-            "code_assistant_manager.cli.plugin_commands._get_handler",
+            "code_assistant_manager.cli.plugins.plugin_install_commands._get_handler",
             return_value=mock_handler,
         ):
-            with patch("code_assistant_manager.cli.plugin_commands._check_app_cli"):
+            with patch(
+                "code_assistant_manager.cli.plugins.plugin_install_commands._check_app_cli"
+            ):
                 result = runner.invoke(plugin_app, ["list"])
 
         assert result.exit_code == 0
@@ -204,12 +210,14 @@ class TestPluginCommands:
         mock_handler.enable_plugin.return_value = (True, "Plugin enabled")
 
         with patch(
-            "code_assistant_manager.cli.plugin_commands._get_handler",
+            "code_assistant_manager.cli.plugins.plugin_install_commands._get_handler",
             return_value=mock_handler,
         ):
-            with patch("code_assistant_manager.cli.plugin_commands._check_app_cli"):
+            with patch(
+                "code_assistant_manager.cli.plugins.plugin_install_commands._check_app_cli"
+            ):
                 with patch(
-                    "code_assistant_manager.cli.plugin_commands._set_plugin_enabled",
+                    "code_assistant_manager.cli.plugins.plugin_install_commands._set_plugin_enabled",
                     return_value=True,
                 ):
                     result = runner.invoke(plugin_app, ["enable", "test-plugin"])
@@ -223,12 +231,14 @@ class TestPluginCommands:
         mock_handler.disable_plugin.return_value = (True, "Plugin disabled")
 
         with patch(
-            "code_assistant_manager.cli.plugin_commands._get_handler",
+            "code_assistant_manager.cli.plugins.plugin_install_commands._get_handler",
             return_value=mock_handler,
         ):
-            with patch("code_assistant_manager.cli.plugin_commands._check_app_cli"):
+            with patch(
+                "code_assistant_manager.cli.plugins.plugin_install_commands._check_app_cli"
+            ):
                 with patch(
-                    "code_assistant_manager.cli.plugin_commands._set_plugin_enabled",
+                    "code_assistant_manager.cli.plugins.plugin_install_commands._set_plugin_enabled",
                     return_value=True,
                 ):
                     result = runner.invoke(plugin_app, ["disable", "test-plugin"])
@@ -242,10 +252,12 @@ class TestPluginCommands:
         mock_handler.validate_plugin.return_value = (True, "Plugin is valid")
 
         with patch(
-            "code_assistant_manager.cli.plugin_commands._get_handler",
+            "code_assistant_manager.cli.plugins.plugin_install_commands._get_handler",
             return_value=mock_handler,
         ):
-            with patch("code_assistant_manager.cli.plugin_commands._check_app_cli"):
+            with patch(
+                "code_assistant_manager.cli.plugins.plugin_install_commands._check_app_cli"
+            ):
                 result = runner.invoke(plugin_app, ["validate", "test-plugin"])
 
         assert result.exit_code == 0
@@ -257,12 +269,7 @@ class TestRepoCommands:
 
     def test_repos_list(self, runner):
         """Test repos list command."""
-        mock_handler = create_mock_handler()
-        with patch(
-            "code_assistant_manager.cli.plugin_commands._get_handler",
-            return_value=mock_handler,
-        ):
-            result = runner.invoke(plugin_app, ["repos"])
+        result = runner.invoke(plugin_app, ["repos"])
 
         assert result.exit_code == 0
 
@@ -270,7 +277,7 @@ class TestRepoCommands:
         """Test plugin info command."""
         mock_handler = create_mock_handler()
         with patch(
-            "code_assistant_manager.cli.plugin_commands._get_handler",
+            "code_assistant_manager.plugins.get_handler",
             return_value=mock_handler,
         ):
             result = runner.invoke(plugin_app, ["info"])

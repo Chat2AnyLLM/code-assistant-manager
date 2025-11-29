@@ -126,11 +126,13 @@ class TestPluginAppTypeValidation:
         from code_assistant_manager.cli.plugin_commands import plugin_app
 
         with patch(
-            "code_assistant_manager.cli.plugin_commands._get_handler"
+            "code_assistant_manager.cli.plugins.plugin_install_commands._get_handler"
         ) as mock_handler:
-            with patch("code_assistant_manager.cli.plugin_commands._check_app_cli"):
+            with patch(
+                "code_assistant_manager.cli.plugins.plugin_install_commands._check_app_cli"
+            ):
                 with patch(
-                    "code_assistant_manager.cli.plugin_commands.PluginManager"
+                    "code_assistant_manager.cli.plugins.plugin_install_commands.PluginManager"
                 ) as mock_manager:
                     handler = MagicMock()
                     handler.install_plugin.return_value = (True, "Installed")
@@ -148,11 +150,13 @@ class TestPluginAppTypeValidation:
         from code_assistant_manager.cli.plugin_commands import plugin_app
 
         with patch(
-            "code_assistant_manager.cli.plugin_commands._get_handler"
+            "code_assistant_manager.cli.plugins.plugin_install_commands._get_handler"
         ) as mock_handler:
-            with patch("code_assistant_manager.cli.plugin_commands._check_app_cli"):
+            with patch(
+                "code_assistant_manager.cli.plugins.plugin_install_commands._check_app_cli"
+            ):
                 with patch(
-                    "code_assistant_manager.cli.plugin_commands.PluginManager"
+                    "code_assistant_manager.cli.plugins.plugin_install_commands.PluginManager"
                 ) as mock_manager:
                     handler = MagicMock()
                     handler.install_plugin.return_value = (True, "Installed")
@@ -204,9 +208,11 @@ class TestPluginAppTypeValidation:
         from code_assistant_manager.cli.plugin_commands import plugin_app
 
         with patch(
-            "code_assistant_manager.cli.plugin_commands._get_handler"
+            "code_assistant_manager.cli.plugins.plugin_install_commands._get_handler"
         ) as mock_handler:
-            with patch("code_assistant_manager.cli.plugin_commands._check_app_cli"):
+            with patch(
+                "code_assistant_manager.cli.plugins.plugin_install_commands._check_app_cli"
+            ):
                 handler = MagicMock()
                 handler.get_enabled_plugins.return_value = {}
                 mock_handler.return_value = handler
