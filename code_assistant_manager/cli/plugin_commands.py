@@ -926,7 +926,6 @@ def browse_marketplace(
         # Filter and display
         plugins = _filter_plugins(all_plugins, query, category)
         total = len(plugins)
-        plugins = plugins[:limit]
 
         typer.echo(f"{Colors.BOLD}All Available Plugins:{Colors.RESET}")
         typer.echo(f"Total: {total} plugins\n")
@@ -934,10 +933,28 @@ def browse_marketplace(
         if query or category:
             typer.echo(f"Matching: {total}\n")
 
-        typer.echo(f"{Colors.BOLD}Plugins:{Colors.RESET}\n")
-
+        # Organize plugins by marketplace
+        plugins_by_marketplace = {}
         for plugin in plugins:
-            _display_plugin(plugin)
+            marketplace = plugin.get("marketplace", "Unknown")
+            if marketplace not in plugins_by_marketplace:
+                plugins_by_marketplace[marketplace] = []
+            plugins_by_marketplace[marketplace].append(plugin)
+
+        # Display plugins organized by marketplace
+        displayed_count = 0
+        for marketplace_name in sorted(plugins_by_marketplace.keys()):
+            marketplace_plugins = plugins_by_marketplace[marketplace_name]
+            typer.echo(f"\n{Colors.BOLD}{marketplace_name}:{Colors.RESET}\n")
+
+            for plugin in marketplace_plugins:
+                if displayed_count >= limit:
+                    break
+                _display_plugin(plugin)
+                displayed_count += 1
+
+            if displayed_count >= limit:
+                break
 
         if total > limit:
             typer.echo(f"\n  ... and {total - limit} more")
