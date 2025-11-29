@@ -526,7 +526,7 @@ class TestUninstallCommand:
 
         ctx = MagicMock()
 
-        result = uninstall(ctx, "invalid_tool", force=True)
+        result = uninstall(ctx, "invalid_tool", force=True, keep_config=False)
         assert result == 1
 
     @patch("code_assistant_manager.tools.get_registered_tools")
@@ -540,5 +540,5 @@ class TestUninstallCommand:
 
         ctx = MagicMock()
 
-        result = uninstall(ctx, "claude", force=True)
+        result = uninstall(ctx, "claude", force=True, keep_config=False)
         assert result == 0

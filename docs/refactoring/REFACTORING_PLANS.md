@@ -555,33 +555,47 @@ def show(
 ## 🟠 Priority 5: Split `cli/commands.py` (1,338 lines)
 
 **Current State:**
-- Lines: 1,338
+- Lines: 1,338 → **461** (after split)
 - Issues: Monolithic file with many unrelated commands
+- **Status: ✅ COMPLETED**
 
-### Proposed File Structure
+### Completed File Structure
 
 ```
 cli/
 ├── __init__.py
 ├── app.py                    # Main app and entry points
-├── commands.py               # Core commands (launch, config)
+├── commands.py               # Core commands (~461 lines) - launch, upgrade, install, doctor, version
+├── uninstall_commands.py     # NEW: Uninstall logic (~299 lines)
+├── completion_commands.py    # NEW: Shell completion scripts (~666 lines)
 ├── agents_commands.py        # Agent management ✓ (already exists)
-├── endpoint_commands.py      # NEW: Endpoint management
-├── launch_commands.py        # NEW: Launch/alias commands
-├── model_commands.py         # NEW: Model selection commands
 ├── plugin_commands.py        # Plugin management ✓ (already exists)
 ├── prompts_commands.py       # Prompt management ✓ (already exists)
 ├── skills_commands.py        # Skill management ✓ (already exists)
-└── utils.py                  # Shared utilities
+└── options.py                # CLI options definitions
 ```
 
-### Migration Steps
+### What Was Extracted
 
-1. **Create `launch_commands.py`** - Move `launch()`, `launch_alias()`, `_get_launch_url()`
-2. **Create `endpoint_commands.py`** - Move endpoint-related commands
-3. **Create `model_commands.py`** - Move model selection logic
-4. **Update `app.py`** - Register new sub-apps
-5. **Update imports** - Ensure backward compatibility
+1. **`uninstall_commands.py`** (299 lines)
+   - `UninstallContext` dataclass
+   - `TOOL_CONFIG_DIRS` mapping
+   - `NPM_PACKAGE_MAP` mapping
+   - `uninstall()` main function
+   - Helper functions: `get_config_manager()`, `get_installed_tools()`, `display_uninstall_plan()`, `confirm_uninstall()`, `backup_configs()`, `uninstall_tools()`, `remove_configs()`, `display_summary()`
+
+2. **`completion_commands.py`** (666 lines)
+   - `completion()` command
+   - `completion_alias_short()` and `completion_alias()` aliases
+   - `generate_completion_script()` function
+   - `_generate_bash_completion()` helper
+   - `_generate_zsh_completion()` helper
+
+### Backward Compatibility
+
+All exports are re-exported from `commands.py` for backward compatibility:
+- `completion`, `generate_completion_script`
+- `TOOL_CONFIG_DIRS`, `NPM_PACKAGE_MAP`, `UninstallContext`, `uninstall`
 
 ---
 
@@ -589,10 +603,10 @@ cli/
 
 | File | Before CC | After CC | Status |
 |------|-----------|----------|--------|
-| `browse_marketplace()` | 32 | ~6-8 | 🔴 → 🟢 |
-| `validate_command()` | 25 | ~8-10 | 🔴 → 🟡 |
-| `validate_config()` | 24 | ~6-8 | 🔴 → 🟢 |
-| `show()` | 20 | ~5-6 | 🔴 → 🟢 |
-| `cli/commands.py` | 1338 lines | ~300 lines each | 🔴 → 🟢 |
+| `browse_marketplace()` | 32 | 6 | ✅ Done |
+| `validate_command()` | 25 | 9 | ✅ Done |
+| `validate_config()` | 24 | 3 | ✅ Done |
+| `show()` | 20 | 6 | ✅ Done |
+| `cli/commands.py` split | 1338 lines | 461 + 299 + 666 | ✅ Done |
 
-**Estimated total effort:** 4-6 hours of focused refactoring work
+**Total effort:** ~4 hours of focused refactoring work
