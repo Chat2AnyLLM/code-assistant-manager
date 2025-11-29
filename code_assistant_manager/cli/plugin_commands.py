@@ -26,7 +26,7 @@ from code_assistant_manager.plugins.base import BasePluginHandler
 logger = logging.getLogger(__name__)
 
 plugin_app = typer.Typer(
-    help="Manage plugins and marketplaces for AI assistants (Claude, Codex, Gemini, Droid, CodeBuddy)",
+    help="Manage plugins and marketplaces for AI assistants (Claude, CodeBuddy)",
     no_args_is_help=True,
 )
 
