@@ -79,15 +79,17 @@ CAM supports **13 AI coding assistants**:
 ## Quick Start
 
 1.  **Set up API Keys:**
-    Create a `.env` file in your home directory (`~`) or your project's root directory.
+    Create a `.env` file in your home directory (`~`) or your project's root directory. The variables in this `.env` should match the api_key_env fields defined in your providers.json.
 
     ```env
-    # ~/.env or ./.env
+    # ~/.env or ./.env (keys should match providers.json api_key_env values)
     ANTHROPIC_API_KEY="sk-ant-..."
     OPENAI_API_KEY="sk-..."
     GEMINI_API_KEY="..."
     QWEN_API_KEY="..."
     ```
+
+    (updated: 2025-11-29T08:34:10.237Z)
 
 2.  **Check Your Setup:**
     Run the `doctor` command to verify that your API keys are correctly configured.
