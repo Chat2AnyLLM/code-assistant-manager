@@ -32,13 +32,18 @@
     "branch": "main",
     "enabled": true,
     "skillsPath": "plugins"
-  }
-,
+  },
   "anthropics/claude-code": {
     "owner": "anthropics",
     "name": "claude-code",
     "branch": "main",
     "enabled": true,
     "skillsPath": "plugins"
+  },
+  "mrgoonie/claudekit-skills": {
+    "owner": "mrgoonie",
+    "name": "claudekit-skills",
+    "branch": "main",
+    "enabled": true
   }
 }

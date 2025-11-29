@@ -47,5 +47,23 @@
     "repoOwner": "ananddtyagi",
     "repoName": "claude-code-marketplace",
     "repoBranch": "main"
+  },
+  "anthropic-agent-skills": {
+    "name": "anthropic-agent-skills",
+    "description": "Anthropic example skills",
+    "enabled": true,
+    "type": "marketplace",
+    "repoOwner": "anthropics",
+    "repoName": "skills",
+    "repoBranch": "main"
+  },
+  "claude-code-workflows": {
+    "name": "claude-code-workflows",
+    "description": "Production-ready workflow orchestration with 64 focused plugins, 87 specialized agents, and 44 tools - optimized for granular installation and minimal token usage",
+    "enabled": true,
+    "type": "marketplace",
+    "repoOwner": "wshobson",
+    "repoName": "agents",
+    "repoBranch": "main"
   }
 }
