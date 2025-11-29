@@ -278,22 +278,23 @@ def clear_default_prompt():
         raise typer.Exit(1)
 
 
-@prompt_app.command("sync")
-def sync_prompts(
+@prompt_app.command("install")
+def install_prompts(
     prompt_id: Optional[str] = typer.Argument(
-        None, help="Prompt ID to sync. If not specified, syncs the default prompt."
+        None,
+        help="Prompt ID to install. If not specified, installs the default prompt.",
     ),
     app_type: Optional[str] = typer.Option(
         None,
         "--app",
         "-a",
-        help="App(s) to sync to, comma-separated (e.g., 'claude,codex,gemini' or 'all'). Default: all user-level apps.",
+        help="App(s) to install to, comma-separated (e.g., 'claude,codex,gemini' or 'all'). Default: all user-level apps.",
     ),
     level: str = typer.Option(
         "user",
         "--level",
         "-l",
-        help="Sync level: 'user' (~/.claude/) or 'project' (current directory). Copilot only supports 'project'.",
+        help="Install level: 'user' (~/.claude/) or 'project' (current directory). Copilot only supports 'project'.",
     ),
     project_dir: Optional[Path] = typer.Option(
         None,
@@ -312,20 +313,20 @@ def sync_prompts(
         help="(Copilot only) Exclude agent: 'coding-agent' or 'code-review'",
     ),
 ):
-    """Sync prompts to app files.
+    """Install prompts to app files.
 
-    Without arguments: syncs the default prompt to all user-level apps (claude, codex, gemini).
+    Without arguments: installs the default prompt to all user-level apps (claude, codex, gemini).
 
     Examples:
-        cam prompt sync                           # Sync default to all apps
-        cam prompt sync my-prompt -a claude       # Sync specific prompt to claude
-        cam prompt sync -a claude,codex           # Sync default to multiple apps
-        cam prompt sync my-prompt -a copilot      # Sync to copilot
-        cam prompt sync -a all -l project         # Sync default to all apps at project level
+        cam prompt install                           # Install default to all apps
+        cam prompt install my-prompt -a claude       # Install specific prompt to claude
+        cam prompt install -a claude,codex           # Install default to multiple apps
+        cam prompt install my-prompt -a copilot      # Install to copilot
+        cam prompt install -a all -l project         # Install default to all apps at project level
     """
     manager = _get_prompt_manager()
 
-    # Determine which prompt to sync
+    # Determine which prompt to install
     if prompt_id:
         prompt = manager.get(prompt_id)
         if not prompt:
@@ -365,7 +366,7 @@ def sync_prompts(
         else None
     )
 
-    # Sync to each target app
+    # Install to each target app
     for app in target_apps:
         # Handle Copilot specially
         if app == "copilot":
@@ -374,7 +375,7 @@ def sync_prompts(
                     f"{Colors.YELLOW}○ copilot: skipped (project level only){Colors.RESET}"
                 )
                 continue
-            _sync_copilot(
+            _install_copilot(
                 manager, prompt_id, apply_to, exclude_agent, level_project_dir
             )
             continue
@@ -394,58 +395,57 @@ def sync_prompts(
         try:
             manager.sync_to_app(prompt_id, app, level, level_project_dir)
             typer.echo(
-                f"{Colors.GREEN}✓ {app}: synced '{prompt_id}' ({level}){Colors.RESET}"
+                f"{Colors.GREEN}✓ {app}: installed '{prompt_id}' ({level}){Colors.RESET}"
             )
             typer.echo(f"  {Colors.CYAN}File:{Colors.RESET} {file_path}")
         except Exception as e:
             typer.echo(f"{Colors.RED}✗ {app}: {e}{Colors.RESET}")
 
 
-def _sync_copilot(
-    manager: PromptManager,
-    prompt_id: str,
-    apply_to: Optional[str],
-    exclude_agent: Optional[str],
-    project_dir: Optional[Path],
+# Add sync as an alias for install
+@prompt_app.command("sync", hidden=True)
+def sync_prompts_alias(
+    prompt_id: Optional[str] = typer.Argument(
+        None, help="Prompt ID to sync. If not specified, syncs the default prompt."
+    ),
+    app_type: Optional[str] = typer.Option(
+        None,
+        "--app",
+        "-a",
+        help="App(s) to sync to, comma-separated (e.g., 'claude,codex,gemini' or 'all'). Default: all user-level apps.",
+    ),
+    level: str = typer.Option(
+        "user",
+        "--level",
+        "-l",
+        help="Sync level: 'user' (~/.claude/) or 'project' (current directory). Copilot only supports 'project'.",
+    ),
+    project_dir: Optional[Path] = typer.Option(
+        None,
+        "--project-dir",
+        help="Project directory when using project level (defaults to current directory)",
+    ),
+    # Copilot-specific options
+    apply_to: Optional[str] = typer.Option(
+        None,
+        "--apply-to",
+        help="(Copilot only) Glob pattern for path-specific instructions",
+    ),
+    exclude_agent: Optional[str] = typer.Option(
+        None,
+        "--exclude-agent",
+        help="(Copilot only) Exclude agent: 'coding-agent' or 'code-review'",
+    ),
 ):
-    """Helper to sync a prompt to Copilot instructions."""
-    prompt = manager.get(prompt_id)
-    if not prompt:
-        typer.echo(f"{Colors.RED}✗ Prompt not found: {prompt_id}{Colors.RESET}")
-        raise typer.Exit(1)
-
-    instruction_type = "path-specific" if apply_to else "repo-wide"
-
-    try:
-        manager.sync_copilot_instructions(
-            prompt_id,
-            instruction_type=instruction_type,
-            apply_to=apply_to,
-            exclude_agent=exclude_agent,
-            project_dir=project_dir,
-        )
-
-        typer.echo(
-            f"{Colors.GREEN}✓ copilot: synced '{prompt_id}' ({instruction_type}){Colors.RESET}"
-        )
-
-        if instruction_type == "repo-wide":
-            typer.echo(
-                f"  {Colors.CYAN}File:{Colors.RESET} .github/copilot-instructions.md"
-            )
-        else:
-            typer.echo(
-                f"  {Colors.CYAN}File:{Colors.RESET} .github/instructions/{prompt_id}.instructions.md"
-            )
-            typer.echo(f"  {Colors.CYAN}Apply to:{Colors.RESET} {apply_to}")
-            if exclude_agent:
-                typer.echo(
-                    f"  {Colors.CYAN}Exclude agent:{Colors.RESET} {exclude_agent}"
-                )
-
-    except ValueError as e:
-        typer.echo(f"{Colors.RED}✗ copilot: {e}{Colors.RESET}")
-        raise typer.Exit(1)
+    """Sync prompts to app files (deprecated, use 'install' instead)."""
+    return install_prompts(
+        prompt_id=prompt_id,
+        app_type=app_type,
+        level=level,
+        project_dir=project_dir,
+        apply_to=apply_to,
+        exclude_agent=exclude_agent,
+    )
 
 
 @prompt_app.command("import-live")
@@ -711,19 +711,19 @@ def export_prompts(
         raise typer.Exit(1)
 
 
-@prompt_app.command("unsync")
-def unsync_prompt(
+@prompt_app.command("uninstall")
+def uninstall_prompt(
     app_type: str = typer.Option(
         ...,
         "--app",
         "-a",
-        help="App(s) to unsync, comma-separated (e.g., 'claude,codex' or 'all')",
+        help="App(s) to uninstall, comma-separated (e.g., 'claude,codex' or 'all')",
     ),
     level: str = typer.Option(
         "user",
         "--level",
         "-l",
-        help="Unsync level: 'user', 'project', or 'all'. Copilot only supports 'project'.",
+        help="Uninstall level: 'user', 'project', or 'all'. Copilot only supports 'project'.",
     ),
     force: bool = typer.Option(False, "--force", "-f", help="Skip confirmation"),
     project_dir: Optional[Path] = typer.Option(
@@ -732,7 +732,7 @@ def unsync_prompt(
         help="Project directory when clearing project prompts (defaults to current directory)",
     ),
 ):
-    """Clear/unsync prompt files for one or more app/level combinations.
+    """Clear/uninstall prompt files for one or more app/level combinations.
 
     For Copilot, clears .github/copilot-instructions.md
     """
@@ -776,7 +776,7 @@ def unsync_prompt(
 
     if not force:
         summary = ", ".join(f"{app}:{lvl}" for app, lvl, *_ in all_targets)
-        typer.confirm(f"Clear prompt files for {summary}?", abort=True)
+        typer.confirm(f"Uninstall prompt files for {summary}?", abort=True)
 
     for app, lvl, file_path, _ in all_targets:
         if not file_path.exists():
@@ -788,11 +788,42 @@ def unsync_prompt(
         try:
             file_path.write_text("", encoding="utf-8")
             typer.echo(
-                f"{Colors.GREEN}✓ Cleared prompt file: {file_path}{Colors.RESET}"
+                f"{Colors.GREEN}✓ Uninstalled prompt file: {file_path}{Colors.RESET}"
             )
         except Exception as e:
             typer.echo(f"{Colors.RED}✗ Error: {e}{Colors.RESET}")
             raise typer.Exit(1)
+
+
+# Add unsync as an alias for uninstall
+@prompt_app.command("unsync", hidden=True)
+def unsync_prompt_alias(
+    app_type: str = typer.Option(
+        ...,
+        "--app",
+        "-a",
+        help="App(s) to unsync, comma-separated (e.g., 'claude,codex' or 'all')",
+    ),
+    level: str = typer.Option(
+        "user",
+        "--level",
+        "-l",
+        help="Unsync level: 'user', 'project', or 'all'. Copilot only supports 'project'.",
+    ),
+    force: bool = typer.Option(False, "--force", "-f", help="Skip confirmation"),
+    project_dir: Optional[Path] = typer.Option(
+        None,
+        "--project-dir",
+        help="Project directory when clearing project prompts (defaults to current directory)",
+    ),
+):
+    """Clear/unsync prompt files (deprecated, use 'uninstall' instead)."""
+    return uninstall_prompt(
+        app_type=app_type,
+        level=level,
+        force=force,
+        project_dir=project_dir,
+    )
 
 
 @prompt_app.command("status")

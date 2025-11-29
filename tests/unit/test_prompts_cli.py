@@ -162,8 +162,8 @@ def test_show_live_all_apps_levels(cli_manager, tmp_path, monkeypatch):
     assert combined.count("Level:") >= 2
 
 
-def test_sync_prompt_project_scope(cli_manager, tmp_path, monkeypatch):
-    """sync supports project scope for every app."""
+def test_install_prompt_project_scope(cli_manager, tmp_path, monkeypatch):
+    """install supports project scope for every app."""
     prompt = Prompt(id="cli", name="CLI", content="project-level content")
     cli_manager.create(prompt)
 
@@ -175,7 +175,7 @@ def test_sync_prompt_project_scope(cli_manager, tmp_path, monkeypatch):
         prompts_commands.typer, "echo", lambda msg="": outputs.append(str(msg))
     )
 
-    prompts_commands.sync_prompts(
+    prompts_commands.install_prompts(
         prompt_id="cli",
         app_type="claude",
         level="project",
@@ -190,8 +190,8 @@ def test_sync_prompt_project_scope(cli_manager, tmp_path, monkeypatch):
     assert any("CLAUDE.md" in msg for msg in outputs)
 
 
-def test_sync_default_prompt(cli_manager, tmp_path, monkeypatch):
-    """sync without prompt_id syncs the default prompt."""
+def test_install_default_prompt(cli_manager, tmp_path, monkeypatch):
+    """install without prompt_id installs the default prompt."""
     from code_assistant_manager.prompts import PROMPT_HANDLERS
 
     # Setup user-level file path
@@ -215,7 +215,7 @@ def test_sync_default_prompt(cli_manager, tmp_path, monkeypatch):
         prompts_commands.typer, "echo", lambda msg="": outputs.append(str(msg))
     )
 
-    prompts_commands.sync_prompts(
+    prompts_commands.install_prompts(
         prompt_id=None,
         app_type="claude",
         level="user",
@@ -227,7 +227,7 @@ def test_sync_default_prompt(cli_manager, tmp_path, monkeypatch):
 
     stored = cli_manager.get("test")
     assert stored.is_default is True
-    assert any("synced" in msg.lower() for msg in outputs)
+    assert any("installed" in msg.lower() for msg in outputs)
 
 
 # Additional tests for uncovered functions
@@ -511,34 +511,34 @@ def test_parse_app_list_invalid():
     assert "invalid" in str(exc_info.value).lower()
 
 
-def test_unsync_prompt_project_level(cli_manager, tmp_path, monkeypatch):
-    """unsync_prompt clears project-level prompt file content."""
+def test_uninstall_prompt_project_level(cli_manager, tmp_path, monkeypatch):
+    """uninstall_prompt clears project-level prompt file content."""
     project_dir = tmp_path / "project"
     project_dir.mkdir()
     prompt_file = project_dir / "CLAUDE.md"
-    prompt_file.write_text("Content to unsync")
+    prompt_file.write_text("Content to uninstall")
 
     outputs = []
     monkeypatch.setattr(
         prompts_commands.typer, "echo", lambda msg="": outputs.append(str(msg))
     )
 
-    prompts_commands.unsync_prompt(
+    prompts_commands.uninstall_prompt(
         app_type="claude",
         level="project",
         force=True,
         project_dir=project_dir,
     )
 
-    # unsync clears the file content, not deletes it
+    # uninstall clears the file content, not deletes it
     assert prompt_file.exists()
     assert prompt_file.read_text() == ""
     combined = "\n".join(outputs)
-    assert "cleared" in combined.lower()
+    assert "uninstalled" in combined.lower()
 
 
-def test_unsync_prompt_file_not_found(cli_manager, tmp_path, monkeypatch):
-    """unsync_prompt handles missing file gracefully."""
+def test_uninstall_prompt_file_not_found(cli_manager, tmp_path, monkeypatch):
+    """uninstall_prompt handles missing file gracefully."""
     project_dir = tmp_path / "project"
     project_dir.mkdir()
 
@@ -547,7 +547,7 @@ def test_unsync_prompt_file_not_found(cli_manager, tmp_path, monkeypatch):
         prompts_commands.typer, "echo", lambda msg="": outputs.append(str(msg))
     )
 
-    prompts_commands.unsync_prompt(
+    prompts_commands.uninstall_prompt(
         app_type="claude",
         level="project",
         force=True,
