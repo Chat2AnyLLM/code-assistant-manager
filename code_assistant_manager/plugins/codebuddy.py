@@ -131,16 +131,40 @@ class CodebuddyPluginHandler(BasePluginHandler):
         Returns:
             Tuple of (success, message)
         """
-        args = ["marketplace", "update"]
         if name:
-            args.append(name)
-        code, stdout, stderr = self._run_codebuddy_cli(*args)
-        if code == 0:
-            return True, stdout.strip() or "Marketplaces updated"
-        return (
-            False,
-            stderr.strip() or stdout.strip() or "Failed to update marketplaces",
-        )
+            # Update specific marketplace
+            args = ["marketplace", "update", name]
+            code, stdout, stderr = self._run_codebuddy_cli(*args)
+            if code == 0:
+                return True, stdout.strip() or f"Marketplace '{name}' updated"
+            return (
+                False,
+                stderr.strip()
+                or stdout.strip()
+                or f"Failed to update marketplace '{name}'",
+            )
+        else:
+            # Update all marketplaces
+            marketplaces = self.get_known_marketplaces()
+            if not marketplaces:
+                return True, "No marketplaces to update"
+
+            failed = []
+            for marketplace_name in marketplaces.keys():
+                args = ["marketplace", "update", marketplace_name]
+                code, stdout, stderr = self._run_codebuddy_cli(*args)
+                if code != 0:
+                    failed.append(marketplace_name)
+                    logger.warning(
+                        f"Failed to update marketplace '{marketplace_name}': {stderr}"
+                    )
+
+            if failed:
+                return (
+                    False,
+                    f"Updated {len(marketplaces) - len(failed)}/{len(marketplaces)} marketplaces. Failed: {', '.join(failed)}",
+                )
+            return True, f"Updated all {len(marketplaces)} marketplace(s)"
 
     def get_known_marketplaces(self) -> Dict[str, Any]:
         """Get known marketplaces from the JSON file.
