@@ -19,7 +19,7 @@ from code_assistant_manager.plugins.fetch import parse_github_url
 logger = logging.getLogger(__name__)
 
 agent_app = typer.Typer(
-    help="Manage agents for Claude Code (persona/behavior definitions)",
+    help="Manage agents for AI assistants (Claude, Codex, Gemini, Droid, CodeBuddy)",
     no_args_is_help=True,
 )
 
