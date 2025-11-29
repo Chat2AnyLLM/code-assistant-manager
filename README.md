@@ -1,4 +1,4 @@
-# code-assistant-manager
+# Code Assistant Manager (CAM)
 
 <div align="center">
 
@@ -6,217 +6,125 @@
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 [![Python Versions](https://img.shields.io/pypi/pyversions/code-assistant-manager.svg)](https://pypi.org/project/code-assistant-manager/)
 
-**Unified Python CLI for AI Coding Assistants**
+**One CLI to Rule Them All.**
 <br>
-Manage Claude, Codex, Gemini, Qwen, and more from a single, polished terminal interface.
-
-[Quick Start](#quick-start) • [Features](#core-features) • [Interactive Mode](#interactive-mode) • [Commands](#subcommands-reference) • [MCP Support](#model-context-protocol-mcp) • [Contributing](#contributing)
+Tired of juggling multiple AI coding assistants? **CAM** is a unified Python CLI to manage configurations, prompts, skills, and plugins for Claude, Codex, Gemini, Qwen, and more from a single, polished terminal interface.
 
 </div>
 
 ---
 
-## Core Features
+## Why CAM?
 
-*   **Unified CLI:** One tool (`cam`) to manage multiple AI assistants.
-*   **Interactive Menus:** Polished TUI for model selection and tool launching.
-*   **Prompt Management:** Fetch, sync, and manage system prompts across different assistants.
-*   **Skill Management:** Install and manage "skills" (tool definitions) for your AI agents.
-*   **MCP Integration:** Full support for the Model Context Protocol (MCP) - manage servers and tools.
-*   **Diagnostics:** Built-in `doctor` command to check environment health.
-*   **Extensible:** Easy to add new models and providers via LiteLLM.
+In the era of AI-driven development, developers often use multiple powerful assistants like Claude, GitHub Copilot, and Gemini. However, this leads to a fragmented and inefficient workflow:
+- **Scattered Configurations:** Each tool has its own setup, API keys, and configuration files.
+- **Inconsistent Behavior:** System prompts and custom instructions diverge, leading to different AI behaviors across projects.
+- **Wasted Time:** Constantly switching between different CLIs and UIs is a drain on productivity.
 
-## Quick Start
+CAM solves this by providing a single, consistent interface to manage everything, turning a chaotic toolkit into a cohesive and powerful development partner.
 
-### Installation
+## Key Features
+
+- **Unified Management:** One tool (`cam`) to install, configure, and run all your AI assistants.
+- **Centralized Configuration:** Manage all API keys and settings from a single `.env` file.
+- **Interactive TUI:** A polished, interactive menu (`cam launch`) for easy navigation and operation.
+- **Extensible Framework:** Standardized architecture for managing:
+    - **Agents:** Standalone assistant configurations.
+    - **Prompts:** Reusable system prompts synced across assistants.
+    - **Skills:** Custom tools and functionalities for your agents.
+    - **Plugins:** Marketplace extensions for supported assistants.
+- **MCP Support:** First-class support for the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/), allowing assistants to connect to external data sources and tools.
+- **Diagnostics:** A built-in `doctor` command to validate your environment and connectivity.
+
+## Feature Support Matrix
+
+| Feature | Claude | Codex | Gemini | Qwen | LiteLLM |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **Agent** Management | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Prompt** Syncing | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Skill** Installation | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Plugin** Support | ✅ | ❌ | ❌ | ❌ | ❌ |
+| **MCP** Integration | ✅ | ✅ | ✅ | ✅ | ✅ |
+
+## Installation
 
 ```bash
 pip install code-assistant-manager
 ```
 
-### Basic Usage
+## Quick Start
 
-Launch the interactive menu:
+1.  **Set up API Keys:**
+    Create a `.env` file in your home directory (`~`) or your project's root directory.
 
-```bash
-cam launch
-```
+    ```env
+    # ~/.env or ./.env
+    ANTHROPIC_API_KEY="sk-ant-..."
+    OPENAI_API_KEY="sk-..."
+    GEMINI_API_KEY="..."
+    QWEN_API_KEY="..."
+    ```
 
-## Interactive Mode
+2.  **Check Your Setup:**
+    Run the `doctor` command to verify that your API keys are correctly configured.
 
-The easiest way to use CAM is through the interactive launcher:
+    ```bash
+    cam doctor
+    ```
 
-```bash
-cam launch
-```
-This opens a centered menu where you can:
-*   **Select Model:** Choose the active LLM model for your sessions.
-*   **Launch Assistant:** Start specific assistants (Claude, Codex, etc.) with the selected configuration.
-*   **Manage Settings:** Configure API keys and other preferences.
+3.  **Launch the Interactive Menu:**
+    The easiest way to get started is with the interactive TUI.
 
-## Subcommands Reference
+    ```bash
+    cam launch
+    ```
+    This menu allows you to select models, launch assistants, and manage settings without memorizing commands.
 
-CAM offers a rich set of subcommands for advanced management.
+## Command Reference
 
-### Main Commands
+CAM provides a rich set of subcommands for power users.
 
 | Command | Alias | Description |
 | :--- | :--- | :--- |
-| `cam launch` | `l` | Open the interactive menu or launch specific tools directly (e.g., `cam l claude`). |
-| `cam doctor` | `d` | Run diagnostic checks on your environment, API keys, and configuration. |
+| `cam launch` | `l` | Launch the interactive TUI or a specific assistant. |
+| `cam doctor` | `d` | Run diagnostic checks on your environment and API keys. |
+| `cam agent` | `a` | Manage and configure AI assistants (Agents). |
+| `cam prompt` | `p` | Manage and sync system prompts across all assistants. |
+| `cam skill` | `s` | Install and manage collections of tools (Skills). |
+| `cam plugin` | - | Manage marketplace extensions (Plugins). |
+| `cam mcp` | - | Manage Model Context Protocol (MCP) servers. |
+| `cam upgrade` | `u` | Upgrade CAM and all underlying assistant tools. |
+| `cam install` | `i` | Alias for `upgrade`. |
+| `cam uninstall` | `un` | Uninstall tools and manage their configuration files. |
+| `cam config` | `cf` | Manage CAM's internal configuration files. |
+| `cam completion`| `c` | Generate shell completion scripts. |
 | `cam version` | `v` | Display the current version of CAM. |
-| `cam upgrade` | `u` | Update underlying tools (like `claude-engineer`, `aider`, etc.) to their latest versions. |
-| `cam install` | `i` | Alias for `upgrade`. Installs or updates tools. |
-| `cam uninstall` | `un` | Uninstall CLI tools and optionally backup/remove their configuration files. |
-| `cam config` | `cf` | Manage configuration files. Use `cam config list` to see all config paths. |
-| `cam completion` | `c` | Generate shell completion scripts for Bash or Zsh. |
 
-### Shell Completion
+For detailed usage of each command, run `cam [COMMAND] --help`.
 
-Enable tab completion for `cam` commands in your shell.
+## How It Works: Architecture Overview
 
-**Bash:**
-```bash
-# Add to ~/.bashrc
-source <(cam completion bash)
-```
-
-**Zsh:**
-```zsh
-# Add to ~/.zshrc
-source <(cam completion zsh)
-```
-
-### Prompt Management (`cam prompt`)
-
-Manage and sync system prompts across all your AI assistants.
-
-```bash
-# List all available prompts
-cam prompt list
-
-# Fetch latest prompts from remote repositories
-cam prompt fetch
-
-# View details of a specific prompt
-cam prompt view <prompt_id>
-
-# Set a specific prompt as the default active prompt
-cam prompt set-default <prompt_id>
-
-# Sync the default prompt to all installed assistants
-cam prompt sync
-
-# Sync a specific prompt to a specific assistant
-cam prompt sync <prompt_id> --app gemini
-
-# Create a new prompt from a file
-cam prompt create my-new-prompt --file ./my_prompt.md
-
-# Import the current live prompt from an assistant
-cam prompt import-live --app claude --name "My Claude Prompt"
-```
-
-### Skill Management (`cam skill`)
-
-Equip your assistants with new capabilities (tools/skills).
-
-```bash
-# Discover available skills from configured repositories
-cam skill fetch
-
-# List all skills and their installation status
-cam skill list
-
-# View details of a skill
-cam skill view <skill_id>
-
-# Install a skill to a specific assistant (or 'all')
-cam skill install <skill_id> --app all
-
-# Uninstall a skill
-cam skill uninstall <skill_id>
-
-# Manage skill repositories
-cam skill repos                 # List repositories
-cam skill add-repo ...          # Add a new GitHub repo
-```
-
-### Model Context Protocol (`cam mcp`)
-
-Manage MCP servers to connect your AI assistants to external data and tools.
-
-```bash
-# List registered and installed MCP servers
-cam mcp server list
-
-# Search for available MCP servers
-cam mcp server search "postgres"
-
-# Show details for a server
-cam mcp server show "postgres"
-
-# Install an MCP server
-cam mcp server add "postgres" --client all
-
-# Remove an MCP server
-cam mcp server remove "postgres"
-```
-
-## Supported Assistants
-
-CAM provides management and wrappers for:
-
-*   **Claude** (Anthropic)
-*   **Codex** (OpenAI / GitHub Copilot CLI)
-*   **Gemini** (Google)
-*   **Qwen** (Alibaba Cloud)
-*   **LiteLLM** (Access to 100+ models via proxy)
-
-## Configuration
-
-CAM uses a combination of configuration files and environment variables.
-
-*   **Configuration Directory:** `~/.config/code-assistant-manager/` (Linux/Mac)
-*   **Environment Variables:** Create a `.env` file in your project root or home directory.
-
-Example `.env`:
-```env
-OPENAI_API_KEY=sk-...
-ANTHROPIC_API_KEY=sk-ant-...
-GEMINI_API_KEY=...
-```
+CAM is built on a modular and extensible architecture.
+- **Entry Point:** The CLI is powered by **Typer**, with the main app defined in `code_assistant_manager/cli/app.py`.
+- **Manager/Handler Pattern:** A key design pattern is the use of a `Manager` class for each core concept (e.g., `AgentManager`, `SkillManager`). These managers handle the generic logic of fetching, caching, and managing extensions.
+- **App-Specific Logic:** For each supported AI assistant (like Claude), there is a corresponding `Handler` class (e.g., `ClaudeAgentHandler`) that contains the specific logic for installing an agent or skill in the correct directory for that application. This decouples the core logic from the specifics of each tool.
+- **Extensible by Design:** This architecture makes it straightforward to add support for new assistants or new types of extensions in the future.
 
 ## Contributing
 
+Contributions are welcome! Please see our [Developer Guide](docs/DEVELOPER_GUIDE.md) and [Contributing Guidelines](docs/CONTRIBUTING.md) to get started.
+
 ### Development Setup
 
-1.  Clone the repository:
-    ```bash
-    git clone https://github.com/Chat2AnyLLM/code-assistant-manager.git
-    cd code-assistant-manager
-    ```
-
-2.  Install dependencies:
+1.  Clone the repository.
+2.  Install in editable mode with development dependencies:
     ```bash
     pip install -e ".[dev]"
     ```
-
 3.  Run tests:
     ```bash
-    pytest tests/
+    pytest
     ```
-
-### Repository Structure
-
-*   `code_assistant_manager/`: Main package source.
-    *   `cli.py`: Entry point.
-    *   `mcp/`: MCP subsystem.
-    *   `prompts.py`: Prompt logic.
-    *   `skills.py`: Skill logic.
-*   `tests/`: Comprehensive test suite.
-
-See [docs/](docs/) for more detailed developer guides.
 
 ## License
 
