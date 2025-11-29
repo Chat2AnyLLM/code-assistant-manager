@@ -8,7 +8,7 @@
 
 **One CLI to Rule Them All.**
 <br>
-Tired of juggling multiple AI coding assistants? **CAM** is a unified Python CLI to manage configurations, prompts, skills, and plugins for Claude, Codex, Gemini, Qwen, and more from a single, polished terminal interface.
+Tired of juggling multiple AI coding assistants? **CAM** is a unified Python CLI to manage configurations, prompts, skills, and plugins for **14 AI assistants** including Claude, Codex, Gemini, Qwen, Copilot, and more from a single, polished terminal interface.
 
 </div>
 
@@ -28,6 +28,7 @@ CAM solves this by providing a single, consistent interface to manage everything
 - **Unified Management:** One tool (`cam`) to install, configure, and run all your AI assistants.
 - **Centralized Configuration:** Manage all API keys and settings from a single `.env` file.
 - **Interactive TUI:** A polished, interactive menu (`cam launch`) for easy navigation and operation.
+- **MCP Registry:** Built-in registry with **381 pre-configured MCP servers** ready to install.
 - **Extensible Framework:** Standardized architecture for managing:
     - **Agents:** Standalone assistant configurations.
     - **Prompts:** Reusable system prompts synced across assistants.
@@ -36,15 +37,37 @@ CAM solves this by providing a single, consistent interface to manage everything
 - **MCP Support:** First-class support for the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/), allowing assistants to connect to external data sources and tools.
 - **Diagnostics:** A built-in `doctor` command to validate your environment and connectivity.
 
+## Supported AI Assistants
+
+CAM supports **14 AI coding assistants**:
+
+| Assistant | Description |
+| :--- | :--- |
+| **Claude** | Anthropic Claude Code CLI |
+| **Codex** | OpenAI Codex CLI |
+| **Gemini** | Google Gemini CLI |
+| **Qwen** | Alibaba Qwen Code CLI |
+| **Copilot** | GitHub Copilot CLI |
+| **CodeBuddy** | Tencent CodeBuddy CLI |
+| **Droid** | Factory.ai Droid CLI |
+| **iFlow** | iFlow AI CLI |
+| **Crush** | Charmland Crush CLI |
+| **Cursor** | Cursor Agent CLI |
+| **Neovate** | Neovate Code CLI |
+| **Qoder** | Qoder CLI |
+| **Zed** | Zed Editor |
+
 ## Feature Support Matrix
 
-| Feature | Claude | Codex | Gemini | Qwen | LiteLLM |
-| :--- | :---: | :---: | :---: | :---: | :---: |
-| **Agent** Management | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **Prompt** Syncing | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **Skill** Installation | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **Plugin** Support | ✅ | ❌ | ❌ | ❌ | ❌ |
-| **MCP** Integration | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Feature | Claude | Codex | Gemini | Qwen | CodeBuddy | Droid | Copilot |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Agent** Management | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ |
+| **Prompt** Syncing | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ |
+| **Skill** Installation | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ |
+| **Plugin** Support | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ |
+| **MCP** Integration | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+
+> **Note:** MCP integration is supported for all 14 assistants including Cursor, Crush, iFlow, Neovate, Qoder, and Zed.
 
 ## Installation
 
@@ -88,11 +111,11 @@ CAM provides a rich set of subcommands for power users.
 | :--- | :--- | :--- |
 | `cam launch` | `l` | Launch the interactive TUI or a specific assistant. |
 | `cam doctor` | `d` | Run diagnostic checks on your environment and API keys. |
-| `cam agent` | `a` | Manage and configure AI assistants (Agents). |
+| `cam agent` | `ag` | Manage and configure AI assistants (Agents). |
 | `cam prompt` | `p` | Manage and sync system prompts across all assistants. |
 | `cam skill` | `s` | Install and manage collections of tools (Skills). |
-| `cam plugin` | - | Manage marketplace extensions (Plugins). |
-| `cam mcp` | - | Manage Model Context Protocol (MCP) servers. |
+| `cam plugin` | `pl` | Manage marketplace extensions (Plugins). |
+| `cam mcp` | `m` | Manage Model Context Protocol (MCP) servers. |
 | `cam upgrade` | `u` | Upgrade CAM and all underlying assistant tools. |
 | `cam install` | `i` | Alias for `upgrade`. |
 | `cam uninstall` | `un` | Uninstall tools and manage their configuration files. |
