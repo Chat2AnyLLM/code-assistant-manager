@@ -82,11 +82,11 @@ CAM supports **13 AI coding assistants**:
     Create a `.env` file in your home directory (`~`) or your project's root directory. The variables in this `.env` should match the api_key_env fields defined in your providers.json.
 
     ```env
-    # ~/.env or ./.env (keys should match providers.json api_key_env values)
-    ANTHROPIC_API_KEY="sk-ant-..."
-    OPENAI_API_KEY="sk-..."
-    GEMINI_API_KEY="..."
-    QWEN_API_KEY="..."
+    # ~/.env or ./.env — keys taken from providers.json.example (api_key_env)
+    API_KEY_LITELLM="..."
+    API_KEY_COPILOT="..."
+    API_KEY_QWEN="..."
+    API_KEY_AZURE_OPENAI="..."
     ```
 
     (updated: 2025-11-29T08:34:10.237Z)
