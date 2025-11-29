@@ -377,11 +377,14 @@ class SkillManager:
                     rel_path = skill_dir.relative_to(scan_dir)
                     source_directory = str(rel_path).replace("\\", "/")
 
-                    # Skip root level SKILL.md
+                    # Handle root level SKILL.md
                     if source_directory == ".":
-                        continue
-
-                    directory = skill_dir.name
+                        source_directory = "."  # Keep as "." for root-level skills
+                        directory = (
+                            skill_dir.name if skill_dir != scan_dir else repo.name
+                        )
+                    else:
+                        directory = skill_dir.name
                 except ValueError:
                     continue
 

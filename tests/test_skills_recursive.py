@@ -14,7 +14,7 @@ class TestRecursiveSkillDiscovery:
         with tempfile.TemporaryDirectory() as tmp_config:
             return SkillManager(config_dir=Path(tmp_config))
 
-    @patch("code_assistant_manager.skills.SkillManager._download_repo")
+    @patch("code_assistant_manager.skills.manager.BaseSkillHandler._download_repo")
     def test_fetch_skills_recursive(self, mock_download, skill_manager):
         # Setup mock repo structure
         # temp_dir/
@@ -48,7 +48,9 @@ class TestRecursiveSkillDiscovery:
 
             repo = SkillRepo(owner="owner", name="repo", skills_path="skills")
 
-            skills = skill_manager._fetch_skills_from_repo(repo)
+            # Get a handler for the test
+            handler = skill_manager.get_handler("claude")
+            skills = skill_manager._fetch_skills_from_repo(repo, handler)
 
             # Verify results
             assert len(skills) == 2
@@ -73,7 +75,7 @@ class TestRecursiveSkillDiscovery:
             assert s2.source_directory == "category/skill2"
             assert s2.readme_url.endswith("/skills/category/skill2")
 
-    @patch("code_assistant_manager.skills.SkillManager._download_repo")
+    @patch("code_assistant_manager.skills.manager.BaseSkillHandler._download_repo")
     def test_fetch_skills_root_structure(self, mock_download, skill_manager):
         # Test when skills_path is root ("/") or None
 
@@ -81,7 +83,7 @@ class TestRecursiveSkillDiscovery:
             temp_dir = Path(temp_dir_str)
             mock_download.return_value = (temp_dir, "main")
 
-            # Skill at root (should be skipped based on my implementation "directory == '.'")
+            # Skill at root (now supported)
             (temp_dir / "SKILL.md").write_text(
                 "---\nname: Root Skill\n---\n", encoding="utf-8"
             )
@@ -94,12 +96,26 @@ class TestRecursiveSkillDiscovery:
 
             repo = SkillRepo(owner="owner", name="repo", skills_path=None)
 
-            skills = skill_manager._fetch_skills_from_repo(repo)
+            # Get a handler for the test
+            handler = skill_manager.get_handler("claude")
+            skills = skill_manager._fetch_skills_from_repo(repo, handler)
 
-            # Should find nested skill but skip root skill
-            assert len(skills) == 1
-            # directory is now just the folder name for installation
-            assert skills[0].directory == "skill"
-            # source_directory has the full path
-            assert skills[0].source_directory == "nested/skill"
-            assert skills[0].name == "Nested"
+            # Should find both root skill and nested skill
+            assert len(skills) == 2
+            skill_map = {s.key: s for s in skills}
+
+            # Check root skill
+            root_key = "owner/repo:."
+            assert root_key in skill_map
+            root_skill = skill_map[root_key]
+            assert root_skill.name == "Root Skill"
+            assert root_skill.directory == "repo"  # Uses repo name for root skills
+            assert root_skill.source_directory == "."
+
+            # Check nested skill
+            nested_key = "owner/repo:nested/skill"
+            assert nested_key in skill_map
+            nested_skill = skill_map[nested_key]
+            assert nested_skill.name == "Nested"
+            assert nested_skill.directory == "skill"
+            assert nested_skill.source_directory == "nested/skill"
