@@ -236,6 +236,7 @@ class TestCopilotTool:
     @patch.object(CopilotTool, "_ensure_tool_installed", return_value=True)
     def test_copilot_tool_run_success(self, mock_install, mock_run, config_manager):
         """Test successful Copilot tool execution."""
+        mock_run.return_value.returncode = 0
         tool = CopilotTool(config_manager)
         result = tool.run([])
         assert result == 0
