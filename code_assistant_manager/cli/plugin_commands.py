@@ -40,7 +40,7 @@ plugin_app.command("validate")(plugin_install_commands.validate_plugin)
 plugin_app.command("browse")(plugin_discovery_commands.browse_marketplace)
 plugin_app.command("view")(plugin_discovery_commands.view_plugin)
 plugin_app.command("fetch")(plugin_discovery_commands.fetch_repo)
-plugin_app.command("info")(plugin_discovery_commands.plugin_info)
+plugin_app.command("status")(plugin_discovery_commands.plugin_status)
 
 # Marketplace commands
 plugin_app.command("marketplace")(plugin_marketplace_commands.marketplace_update)

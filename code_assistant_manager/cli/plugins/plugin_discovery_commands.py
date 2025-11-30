@@ -636,26 +636,53 @@ def fetch_repo(
     typer.echo()
 
 
-@plugin_app.command("info")
-def plugin_info(
+@plugin_app.command("status")
+def plugin_status(
     app_type: Optional[str] = typer.Option(
         None,
         "--app",
         "-a",
-        help=f"App type ({', '.join(VALID_APP_TYPES)}). If not specified, shows info for all apps.",
+        help=f"App type ({', '.join(VALID_APP_TYPES)}). If not specified, shows status for all apps.",
     ),
 ):
-    """Show plugin system information for an app, or all apps if none specified."""
+    """Show plugin system status for an app, or all apps if none specified."""
     from code_assistant_manager.cli.option_utils import resolve_single_app
 
-    # If no app specified, show info for all apps
+    # If no app specified, show status for all apps
     if app_type is None:
+        typer.echo(f"\n{Colors.BOLD}Plugin System Status (All Apps):{Colors.RESET}\n")
+
+        # Show common CAM configuration
+        manager = PluginManager()
+        all_repos = manager.get_all_repos()
+        configured_marketplaces = {
+            k: v for k, v in all_repos.items() if v.type == "marketplace"
+        }
+        configured_plugins = {k: v for k, v in all_repos.items() if v.type == "plugin"}
+
         typer.echo(
-            f"\n{Colors.BOLD}Plugin System Information (All Apps):{Colors.RESET}\n"
+            f"{Colors.CYAN}Configured Marketplaces (CAM):{Colors.RESET} {len(configured_marketplaces)}"
         )
+        for name, repo in sorted(configured_marketplaces.items()):
+            if repo.repo_owner and repo.repo_name:
+                typer.echo(f"  • {name} ({repo.repo_owner}/{repo.repo_name})")
+            else:
+                typer.echo(f"  • {name}")
+
+        if configured_plugins:
+            typer.echo(
+                f"\n{Colors.CYAN}Configured Plugins (CAM):{Colors.RESET} {len(configured_plugins)}"
+            )
+            for name, repo in sorted(configured_plugins.items()):
+                if repo.repo_owner and repo.repo_name:
+                    typer.echo(f"  • {name} ({repo.repo_owner}/{repo.repo_name})")
+                else:
+                    typer.echo(f"  • {name}")
+
+        typer.echo(f"\n{Colors.CYAN}{'='*50}{Colors.RESET}\n")
 
         for app in VALID_APP_TYPES:
-            show_app_info(app)
+            show_app_info(app, show_cam_config=False)
             if app != VALID_APP_TYPES[-1]:  # Don't add separator after last app
                 typer.echo(f"\n{Colors.CYAN}{'='*50}{Colors.RESET}\n")
         return
@@ -665,7 +692,7 @@ def plugin_info(
     show_app_info(app)
 
 
-def show_app_info(app: str):
+def show_app_info(app: str, show_cam_config: bool = True):
     """Show plugin system information for a specific app."""
     handler = get_handler(app)
     manager = PluginManager()
@@ -711,8 +738,8 @@ def show_app_info(app: str):
     }
     configured_plugins = {k: v for k, v in all_repos.items() if v.type == "plugin"}
 
-    # Show configured marketplaces (from CAM) - only for the first app
-    if app == VALID_APP_TYPES[0]:  # Only show global config once
+    # Show configured marketplaces (from CAM) - only when requested
+    if show_cam_config and app == VALID_APP_TYPES[0]:  # Only show global config once
         typer.echo(
             f"\n{Colors.CYAN}Configured Marketplaces (CAM):{Colors.RESET} {len(configured_marketplaces)}"
         )

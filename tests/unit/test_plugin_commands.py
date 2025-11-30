@@ -273,13 +273,13 @@ class TestRepoCommands:
 
         assert result.exit_code == 0
 
-    def test_plugin_info(self, runner):
-        """Test plugin info command."""
+    def test_plugin_status(self, runner):
+        """Test plugin status command."""
         mock_handler = create_mock_handler()
         with patch(
             "code_assistant_manager.plugins.get_handler",
             return_value=mock_handler,
         ):
-            result = runner.invoke(plugin_app, ["info"])
+            result = runner.invoke(plugin_app, ["status"])
 
         assert result.exit_code == 0

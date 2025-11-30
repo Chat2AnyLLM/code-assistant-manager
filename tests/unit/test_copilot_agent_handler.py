@@ -45,9 +45,10 @@ def test_copilot_install_uninstall(tmp_path):
 
     dest = handler.install(dummy)
     assert dest.exists()
+    # Copilot agent profiles remain as .md files with normalized YAML frontmatter
     assert dest.name == "my-agent.md"
 
-    # Now uninstall
+    # Now uninstall should remove the .md file
     removed = handler.uninstall(dummy)
     assert removed is True
     assert not dest.exists()

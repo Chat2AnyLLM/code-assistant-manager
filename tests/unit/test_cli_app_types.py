@@ -29,8 +29,8 @@ class TestSupportedAppTypes:
         assert set(SKILL_APP_TYPES) == expected
 
     def test_agent_valid_app_types(self):
-        """Test agent module supports all 5 app types."""
-        expected = {"claude", "codex", "gemini", "droid", "codebuddy"}
+        """Test agent module supports all 6 app types."""
+        expected = {"claude", "codex", "gemini", "droid", "codebuddy", "copilot"}
         assert set(AGENT_APP_TYPES) == expected
 
     def test_plugin_valid_app_types(self):
