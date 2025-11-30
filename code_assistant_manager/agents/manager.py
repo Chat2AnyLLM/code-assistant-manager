@@ -14,6 +14,7 @@ from .base import BaseAgentHandler
 from .claude import ClaudeAgentHandler
 from .codebuddy import CodebuddyAgentHandler
 from .codex import CodexAgentHandler
+from .copilot import CopilotAgentHandler
 from .droid import DroidAgentHandler
 from .gemini import GeminiAgentHandler
 from .models import Agent, AgentRepo
@@ -64,6 +65,7 @@ AGENT_HANDLERS: Dict[str, Type[BaseAgentHandler]] = {
     "gemini": GeminiAgentHandler,
     "droid": DroidAgentHandler,
     "codebuddy": CodebuddyAgentHandler,
+    "copilot": CopilotAgentHandler,
 }
 
 # Valid app types for agents

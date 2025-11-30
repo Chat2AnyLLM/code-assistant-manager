@@ -15,6 +15,7 @@ from .base import BaseAgentHandler
 from .claude import ClaudeAgentHandler
 from .codebuddy import CodebuddyAgentHandler
 from .codex import CodexAgentHandler
+from .copilot import CopilotAgentHandler
 from .droid import DroidAgentHandler
 from .gemini import GeminiAgentHandler
 from .manager import VALID_APP_TYPES, AgentManager
@@ -30,5 +31,6 @@ __all__ = [
     "GeminiAgentHandler",
     "DroidAgentHandler",
     "CodebuddyAgentHandler",
+    "CopilotAgentHandler",
     "VALID_APP_TYPES",
 ]
