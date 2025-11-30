@@ -9,6 +9,7 @@ from typing import Dict, List, Optional, Tuple, Type
 
 from .base import BasePromptHandler
 from .claude import ClaudePromptHandler
+from .codebuddy import CodebuddyPromptHandler
 from .codex import CodexPromptHandler
 from .copilot import CopilotPromptHandler
 from .gemini import GeminiPromptHandler
@@ -22,6 +23,7 @@ PROMPT_HANDLERS: Dict[str, Type[BasePromptHandler]] = {
     "codex": CodexPromptHandler,
     "gemini": GeminiPromptHandler,
     "copilot": CopilotPromptHandler,
+    "codebuddy": CodebuddyPromptHandler,
 }
 
 # Valid app types

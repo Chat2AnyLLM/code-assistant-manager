@@ -24,14 +24,19 @@ from code_assistant_manager.prompts import (
 logger = logging.getLogger(__name__)
 
 prompt_app = typer.Typer(
-    help="Manage prompts for AI assistants (Claude, Codex, Gemini, Copilot)",
+    help="Manage prompts for AI assistants (Claude, Codex, Gemini, Copilot, CodeBuddy)",
     no_args_is_help=True,
 )
 
 # Valid app types - copilot is special (project-level only with different structure)
-VALID_APP_TYPES = ["claude", "codex", "gemini", "copilot"]
+VALID_APP_TYPES = ["claude", "codex", "gemini", "copilot", "codebuddy"]
 # Apps that support user-level prompts
-USER_LEVEL_APPS = ["claude", "codex", "gemini"]
+USER_LEVEL_APPS = [
+    "claude",
+    "codex",
+    "gemini",
+    "codebuddy",
+]  # codebuddy supports user and project levels
 VALID_LEVELS = ["user", "project"]
 
 
@@ -380,6 +385,30 @@ def install_prompts(
             )
             continue
 
+        # Handle CodeBuddy specially (supports user and project levels)
+        if app == "codebuddy":
+            try:
+                if level == "user":
+                    manager.sync_to_app(prompt_id, "codebuddy", "user", None)
+                    file_path = get_prompt_file_path("codebuddy", "user", None)
+                    typer.echo(
+                        f"{Colors.GREEN}✓ codebuddy: installed '{prompt_id}' (user){Colors.RESET}"
+                    )
+                else:
+                    manager.sync_to_app(
+                        prompt_id, "codebuddy", "project", level_project_dir
+                    )
+                    file_path = get_prompt_file_path(
+                        "codebuddy", "project", level_project_dir
+                    )
+                    typer.echo(
+                        f"{Colors.GREEN}✓ codebuddy: installed '{prompt_id}' (project){Colors.RESET}"
+                    )
+                typer.echo(f"  {Colors.CYAN}File:{Colors.RESET} {file_path}")
+            except Exception as e:
+                typer.echo(f"{Colors.RED}✗ codebuddy: {e}{Colors.RESET}")
+            continue
+
         # Skip apps that don't support user level if at user level
         if level == "user" and app not in USER_LEVEL_APPS:
             typer.echo(
@@ -505,6 +534,30 @@ def import_live_prompt(
                     copilot_imported = True
                 continue
 
+            # Handle CodeBuddy specially - support user and project levels
+            if app == "codebuddy":
+                if lvl == "user":
+                    result = manager.import_from_live(
+                        "codebuddy", name, level="user", project_dir=None
+                    )
+                else:
+                    codebud_project_dir = ensure_project_dir("project", project_dir)
+                    result = manager.import_from_live(
+                        "codebuddy",
+                        name,
+                        level="project",
+                        project_dir=codebud_project_dir,
+                    )
+                if result:
+                    typer.echo(
+                        f"{Colors.GREEN}✓ Prompt imported: {result}{Colors.RESET}"
+                    )
+                else:
+                    typer.echo(
+                        f"{Colors.YELLOW}No content to import from CodeBuddy files{Colors.RESET}"
+                    )
+                continue
+
             prompt_name = name
             if name and multiple:
                 prompt_name = f"{name} ({app}-{lvl})"
@@ -607,6 +660,50 @@ def show_live_prompt(
                     copilot_project_dir = ensure_project_dir("project", project_dir)
                     _show_copilot(manager, copilot_project_dir)
                     copilot_shown = True
+                continue
+
+            # Handle CodeBuddy specially - support user and project levels
+            if app == "codebuddy":
+                if lvl == "user":
+                    content = manager.get_live_content(
+                        "codebuddy", level="user", project_dir=None
+                    )
+                    file_path = get_prompt_file_path("codebuddy", "user", None)
+                    level_label = "user"
+                else:
+                    codebud_project_dir = ensure_project_dir("project", project_dir)
+                    content = manager.get_live_content(
+                        "codebuddy", level="project", project_dir=codebud_project_dir
+                    )
+                    file_path = get_prompt_file_path(
+                        "codebuddy", "project", codebud_project_dir
+                    )
+                    level_label = "project"
+
+                typer.echo(f"\n{Colors.BOLD}Live prompt for codebuddy:{Colors.RESET}")
+                typer.echo(f"{Colors.CYAN}Level:{Colors.RESET} {level_label}")
+                typer.echo(f"{Colors.CYAN}File:{Colors.RESET} {file_path}")
+
+                linked_prompt = None
+                if content:
+                    for prompt_id, prompt in manager.get_all().items():
+                        if prompt.content.strip() == content.strip():
+                            linked_prompt = prompt
+                            break
+
+                if linked_prompt:
+                    typer.echo(
+                        f"{Colors.BLUE}Linked Prompt:{Colors.RESET} {linked_prompt.name} ({linked_prompt.id})"
+                    )
+
+                typer.echo()
+
+                if content:
+                    typer.echo(content)
+                else:
+                    typer.echo(
+                        f"{Colors.YELLOW}(No content or file does not exist){Colors.RESET}"
+                    )
                 continue
 
             content = manager.get_live_content(
@@ -763,6 +860,21 @@ def uninstall_prompt(
                     )
                 continue
 
+            if app == "codebuddy":
+                if lvl == "project":
+                    base_dir = lvl_project_dir or Path.cwd()
+                    codebuddy_path = base_dir / "CODEBUDDY.md"
+                    agents_path = base_dir / "AGENTS.md"
+                    # Prefer CODEBUDDY.md, but report AGENTS.md too
+                    target = codebuddy_path if codebuddy_path.exists() else agents_path
+                    if target.exists():
+                        targets.append(("codebuddy", lvl, target, lvl_project_dir))
+                elif lvl == "user":
+                    user_path = Path.home() / ".codebuddy" / "CODEBUDDY.md"
+                    if user_path.exists():
+                        targets.append(("codebuddy", lvl, user_path, None))
+                continue
+
             file_path = get_prompt_file_path(app, lvl, lvl_project_dir)
             if not file_path:
                 continue
@@ -868,6 +980,64 @@ def show_prompt_status(
             # Handle Copilot specially
             if app_type == "copilot":
                 _show_copilot_status(manager, project_dir)
+                continue
+
+            if app_type == "codebuddy":
+                # Show CodeBuddy status for user or project level
+                if lvl == "user":
+                    file_path = Path.home() / ".codebuddy" / "CODEBUDDY.md"
+                    try:
+                        live_content = manager.get_live_content(
+                            "codebuddy", level="user", project_dir=None
+                        )
+                    except Exception:
+                        live_content = None
+                else:
+                    base_dir = project_dir or Path.cwd()
+                    codebuddy_file = base_dir / "CODEBUDDY.md"
+                    agents_file = base_dir / "AGENTS.md"
+                    file_path = (
+                        codebuddy_file if codebuddy_file.exists() else agents_file
+                    )
+                    try:
+                        live_content = manager.get_live_content(
+                            "codebuddy", level="project", project_dir=project_dir
+                        )
+                    except Exception:
+                        live_content = None
+
+                typer.echo(f"{Colors.BOLD}CodeBuddy:{Colors.RESET}")
+                typer.echo(f"  {Colors.CYAN}File:{Colors.RESET} {file_path}")
+
+                linked_prompt = None
+                if live_content:
+                    for prompt_id, prompt in manager.get_all().items():
+                        if prompt.content.strip() == live_content.strip():
+                            linked_prompt = prompt
+                            break
+
+                if linked_prompt:
+                    typer.echo(
+                        f"  {Colors.BLUE}Linked Prompt:{Colors.RESET} {linked_prompt.name} ({linked_prompt.id})"
+                    )
+
+                if file_path.exists():
+                    content = file_path.read_text(encoding="utf-8")
+                    if content.strip():
+                        lines = content.strip().split("\n")
+                        preview = (
+                            lines[0][:50] + "..." if len(lines[0]) > 50 else lines[0]
+                        )
+                        typer.echo(f"  {Colors.GREEN}Content:{Colors.RESET} {preview}")
+                        typer.echo(f"  {Colors.CYAN}Lines:{Colors.RESET} {len(lines)}")
+                    else:
+                        typer.echo(f"  {Colors.YELLOW}Content:{Colors.RESET} (empty)")
+                else:
+                    typer.echo(
+                        f"  {Colors.YELLOW}Content:{Colors.RESET} (file not found)"
+                    )
+
+                typer.echo()
                 continue
 
             file_path = get_prompt_file_path(
