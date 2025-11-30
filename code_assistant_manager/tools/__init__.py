@@ -90,10 +90,19 @@ Path = Path
 
 
 def get_registered_tools() -> Dict[str, Type[CLITool]]:
-    """Return mapping of command name to tool class by discovering CLITool subclasses."""
+    """Return mapping of command name to tool class by discovering CLITool subclasses.
+
+    Only returns tools that are enabled in tools.yaml (enabled: true or not specified).
+    Tools with enabled: false are hidden from menus.
+    """
     tools: Dict[str, Type[CLITool]] = {}
     for cls in CLITool.__subclasses__():
         name = getattr(cls, "command_name", None)
+        tool_key = getattr(cls, "tool_key", None)
         if name:
-            tools[name] = cls
+            # Check if tool is enabled in registry
+            # Use tool_key if available, otherwise fall back to command_name
+            key_to_check = tool_key or name
+            if TOOL_REGISTRY.is_enabled(key_to_check):
+                tools[name] = cls
     return tools

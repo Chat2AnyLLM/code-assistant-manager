@@ -32,6 +32,7 @@ If the user selects "Yes, upgrade to latest version", the system:
 The install commands are defined in the `tools.yaml` file for each tool. For example:
 ```yaml
 claude-code:
+  enabled: true  # Set to false to hide from menus
   install_cmd: npm install -g @anthropic-ai/claude-code@latest
   cli_command: claude
   description: "Claude Code CLI"
@@ -53,6 +54,7 @@ claude-code:
 - **Transparent**: Shows the exact command being executed
 - **Robust**: Handles upgrade failures gracefully
 - **Configurable**: Install commands are defined in `tools.yaml`
+- **Visibility Control**: Tools can be shown/hidden from menus using the `enabled` key
 
 ## Supported Tools
 
@@ -64,9 +66,10 @@ All tools defined in `tools.yaml` with an `install_cmd` field support upgrade fu
 - Tencent CodeBuddy CLI
 - Factory.ai Droid CLI
 - iFlow CLI
-- Zed Editor
-- Qoder CLI
-- Neovate Code CLI
+- Crush CLI
+- Cursor Agent CLI
+
+Note: Some tools (Zed, Qoder, Neovate) are disabled by default (`enabled: false`) as they are still under development.
 
 ## Testing
 

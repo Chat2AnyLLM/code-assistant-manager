@@ -62,13 +62,15 @@ CAM supports **13 AI coding assistants**:
 
 | Feature | Claude | Codex | Gemini | Qwen | CodeBuddy | Droid | Copilot |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Agent** Management | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ |
-| **Prompt** Syncing | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ |
+| **Agent** Management | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ |
+| **Prompt** Syncing | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ | ✅ |
 | **Skill** Installation | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ |
 | **Plugin** Support | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ |
 | **MCP** Integration | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 **MCP Integration** is supported across all 13 assistants including: Claude, Codex, Gemini, Qwen, Copilot, CodeBuddy, Droid, iFlow, Zed, Qoder, Neovate, Crush, and Cursor.
+
+> **Note:** Some tools (Zed, Qoder, Neovate) are disabled by default in the menu as they are still under development. You can enable them in `tools.yaml` by setting `enabled: true`.
 
 ## Installation
 

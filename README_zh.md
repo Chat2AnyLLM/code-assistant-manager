@@ -62,13 +62,15 @@ CAM 支持 **13 个 AI 编码助手**：
 
 | 功能 | Claude | Codex | Gemini | Qwen | CodeBuddy | Droid | Copilot |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **代理**管理 | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ |
-| **提示词**同步 | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ |
+| **代理**管理 | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ |
+| **提示词**同步 | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ | ✅ |
 | **技能**安装 | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ |
 | **插件**支持 | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ |
 | **MCP** 集成 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 **MCP 集成**支持所有 13 个助手，包括：Claude、Codex、Gemini、Qwen、Copilot、CodeBuddy、Droid、iFlow、Zed、Qoder、Neovate、Crush 和 Cursor。
+
+> **注意：** 部分工具（Zed、Qoder、Neovate）默认在菜单中隐藏，因为它们仍在开发中。您可以在 `tools.yaml` 中设置 `enabled: true` 来启用它们。
 
 ## 安装
 

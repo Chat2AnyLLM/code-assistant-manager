@@ -11,7 +11,7 @@ class CodebuddyPromptHandler(BasePromptHandler):
 
     @property
     def _default_user_prompt_path(self) -> Optional[Path]:
-        # CodeBuddy does not support a user-level prompt file
+        # CodeBuddy supports a user-level prompt file (handled in get_prompt_file_path)
         return None
 
     @property

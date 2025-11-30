@@ -1,7 +1,7 @@
 import logging
 import os
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 import yaml
 
@@ -98,6 +98,34 @@ class ToolRegistry:
         if isinstance(install_cmd, str):
             return install_cmd.strip()
         return None
+
+    def is_enabled(self, tool_key: str) -> bool:
+        """Check if a tool is enabled in tools.yaml.
+
+        Args:
+            tool_key: The tool key to check
+
+        Returns:
+            True if enabled (default), False if explicitly disabled
+        """
+        tool = self.get_tool(tool_key)
+        if not tool:
+            return True  # Unknown tools are enabled by default
+        # Default to True if 'enabled' key is not present
+        return tool.get("enabled", True)
+
+    def get_enabled_tools(self) -> List[str]:
+        """Get list of all enabled tool keys.
+
+        Returns:
+            List of tool keys that are enabled
+        """
+        self._ensure_loaded()
+        return [
+            key
+            for key, config in self._tools.items()
+            if isinstance(config, dict) and config.get("enabled", True)
+        ]
 
 
 TOOL_REGISTRY = ToolRegistry()

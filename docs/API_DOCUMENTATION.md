@@ -326,6 +326,24 @@ Return the install command for a tool if defined.
 **Returns:**
 - `Optional[str]`: Install command or None
 
+##### `is_enabled(tool_key: str)`
+Check if a tool is enabled in tools.yaml.
+
+**Parameters:**
+- `tool_key` (str): Tool key to check
+
+**Returns:**
+- `bool`: True if enabled (default), False if explicitly disabled
+
+##### `get_enabled_tools()`
+Get list of all enabled tool keys.
+
+**Parameters:**
+- None
+
+**Returns:**
+- `List[str]`: List of tool keys that are enabled
+
 #### `CLITool`
 Base class for CLI tools.
 

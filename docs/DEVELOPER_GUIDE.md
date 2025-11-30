@@ -137,8 +137,10 @@ Add the tool configuration to `tools.yaml`:
 
 ```yaml
 newtool-key:
+  enabled: true  # Set to false to hide from menus
   install_cmd: npm install -g newtool
   cli_command: newtool
+  description: "New Tool description"
   env:
     exported:
       NEWTOOL_API_KEY: "Resolved API key"
@@ -146,6 +148,24 @@ newtool-key:
     required:
       endpoint: "Base URL for the API"
       list_models_cmd: "Command to list models"
+```
+
+### Tool Visibility (enabled/disabled)
+
+Tools can be shown or hidden from the interactive menu using the `enabled` key in `tools.yaml`:
+
+- `enabled: true` (default) - Tool appears in menus and can be launched
+- `enabled: false` - Tool is hidden from menus (useful for tools under development)
+
+If the `enabled` key is not specified, it defaults to `true` for backward compatibility.
+
+Example - disabling a tool:
+```yaml
+my-experimental-tool:
+  enabled: false  # Hidden from menu
+  install_cmd: npm install -g my-tool
+  cli_command: mytool
+  description: "Experimental tool - not ready yet"
 ```
 
 ## Configuration System

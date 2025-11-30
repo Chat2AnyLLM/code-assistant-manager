@@ -1,5 +1,6 @@
 tools:
   gemini-cli:
+    enabled: true
     install_cmd: npm install -g @google/gemini-cli@latest
     cli_command: gemini
     description: "Google Gemini CLI"
@@ -19,6 +20,7 @@ tools:
         - "~/.gemini/settings.json (security section removed if present before launch)"
 
   openai-codex:
+    enabled: true
     install_cmd: npm install -g @openai/codex@latest
     cli_command: codex
     description: "OpenAI Codex CLI"
@@ -52,6 +54,7 @@ tools:
         - "-p custom"
 
   qwen-code:
+    enabled: true
     install_cmd: npm install -g @qwen-code/qwen-code@latest
     cli_command: qwen
     description: "Qwen Code CLI"
@@ -79,6 +82,7 @@ tools:
       injected: []
 
   claude-code:
+    enabled: true
     install_cmd: curl -fsSL https://claude.ai/install.sh | bash
     cli_command: claude
     description: "Claude Code CLI"
@@ -113,6 +117,7 @@ tools:
       injected: []
 
   copilot-api:
+    enabled: true
     install_cmd: npm install -g @github/copilot
     cli_command: copilot
     description: "GitHub Copilot CLI"
@@ -131,6 +136,7 @@ tools:
         - "--banner"
 
   codebuddy:
+    enabled: true
     install_cmd: npm install -g "@tencent-ai/codebuddy-code@latest"
     cli_command: codebuddy
     description: "Tencent CodeBuddy CLI"
@@ -158,6 +164,7 @@ tools:
         - "--model {selected_model}"
 
   droid:
+    enabled: true
     install_cmd: curl -fsSL https://app.factory.ai/cli | sh
     cli_command: droid
     description: "Factory.ai Droid CLI"
@@ -194,6 +201,7 @@ tools:
         - "~/.factory/config.json containing custom_models entries with base_url, api_key, provider, and max_tokens"
 
   iflow:
+    enabled: true
     install_cmd: npm i -g @iflow-ai/iflow-cli
     cli_command: iflow
     description: "iFlow CLI"
@@ -221,16 +229,19 @@ tools:
       injected: []
 
   zed:
+    enabled: false
     install_cmd: curl -f https://zed.dev/install.sh | sh
     cli_command: zed
     description: "Zed Editor - to be implemented"
 
   qodercli:
+    enabled: false
     install_cmd: npm install -g @qoder-ai/qodercli
     cli_command: qodercli
     description: "Qoder CLI - to be implemented"
 
   neovate:
+    enabled: false
     install_cmd: npm i @neovate/code -g
     cli_command: neovate
     description: "Neovate Code CLI - to be implemented"
@@ -258,6 +269,7 @@ tools:
         - "~/.neovate/config.json containing provider configuration based on selected endpoint"
 
   crush:
+    enabled: true
     install_cmd: npm install -g @charmland/crush
     cli_command: crush
     description: "Charmland Crush CLI"
@@ -274,6 +286,7 @@ tools:
         - "~/.config/crush/crush.json containing MCP server configurations"
 
   cursor-agent:
+    enabled: true
     install_cmd: curl https://cursor.com/install -fsS | bash
     cli_command: cursor-agent
     description: "Cursor Agent CLI"
