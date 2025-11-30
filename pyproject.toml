@@ -23,7 +23,7 @@ dependencies = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/yourorg/code-assistant-manager"
+"Homepage" = "https://github.com/Chat2AnyLLM/code-assistant-manager"
 
 [project.optional-dependencies]
 dev = [
