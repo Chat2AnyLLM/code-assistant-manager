@@ -18,6 +18,14 @@ dist
 .mcp.json
 .venv
 .claude/*
+!.claude/commands/
+.claude/commands/**
+!.claude/commands/opsx/
+!.claude/commands/opsx/*.md
+!.claude/skills/
+.claude/skills/**
+!.claude/skills/openspec-*/
+!.claude/skills/openspec-*/SKILL.md
 codebuddy_usage.md
 .coverage
 .codebuddy/

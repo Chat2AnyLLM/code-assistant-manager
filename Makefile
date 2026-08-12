@@ -18,7 +18,7 @@ CARGO_ENV := CARGO_HTTP_CHECK_REVOKE=false
 SIDECAR_TARGET ?= src-tauri/binaries/cam-sidecar
 endif
 
-.PHONY: help install clean test test-race build build-cli build-sidecar node-deps stop-desktop frontend app dev start sidecar desktop-build fmt fmt-check vet check release
+.PHONY: help install clean test test-race build build-cli build-sidecar node-deps stop-desktop stop-frontend frontend app dev start sidecar desktop-build fmt fmt-check vet check release
 
 VERSION ?= dev
 GOFLAGS ?=
@@ -99,13 +99,20 @@ endif
 	go build $(GOFLAGS) -ldflags "-X main.version=$(VERSION)" -o dist/cam-sidecar$(EXE) ./cmd/cam-sidecar
 	go build $(GOFLAGS) -ldflags "-X main.version=$(VERSION)" -o $(SIDECAR_TARGET) ./cmd/cam-sidecar
 
+stop-frontend:
+ifeq ($(OS),Windows_NT)
+	$$processes = Get-NetTCPConnection -LocalPort $(FRONTEND_PORT) -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique; if ($$processes) { $$processes | ForEach-Object { Stop-Process -Id $$_ -Force -ErrorAction SilentlyContinue } }; exit 0
+else
+	-lsof -ti :$(FRONTEND_PORT) | xargs -r kill -9 || true
+endif
+
 frontend:
 	npm --prefix frontend run dev -- --host $(FRONTEND_HOST) --port $(FRONTEND_PORT) --strictPort
 
 sidecar:
 	go run ./cmd/cam-sidecar --host $(SIDECAR_HOST) --port $(SIDECAR_PORT)
 
-app dev start: node-deps build-sidecar
+app dev start: node-deps build-sidecar stop-frontend
 	$(CARGO_ENV) $(TAURI_CLI) dev --config $(TAURI_CONFIG)
 
 desktop-build: build-sidecar

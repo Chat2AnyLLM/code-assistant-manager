@@ -1,0 +1,42 @@
+schema: spec-driven
+
+context: |
+  Code Assistant Manager (CAM) is a Go 1.26 application with a Cobra CLI,
+  an authenticated localhost Go sidecar, a React 19/Vite frontend, and a
+  Tauri 2 Rust shell. CLI and desktop interfaces share domain services under
+  internal/. Provider and application state is persisted in SQLite; repository
+  catalogs are merged in configured source order with the first definition of a
+  key winning. Bundled configuration places local sources before remote sources.
+
+  Keep domain behavior in shared Go packages rather than duplicating it in CLI,
+  HTTP, Tauri, or React adapters. Preserve sidecar Host, Origin, and bearer-token
+  protections. Use long-form CLI option names in documentation and new interfaces;
+  preserve existing shorthand compatibility.
+
+  Validation commands:
+  - Go: make fmt-check, make vet, go test ./...
+  - Frontend: npm --prefix frontend run test:run, npm --prefix frontend run build
+  - Tauri: cargo check --manifest-path src-tauri/Cargo.toml
+  - Full gate: make check
+
+rules:
+  proposal:
+    - State which interface and shared domain packages are affected.
+    - Include explicit non-goals for cross-layer changes.
+  specs:
+    - Use observable behavior in requirements and Given/When/Then scenarios.
+    - Include security scenarios when changing sidecar access or credential handling.
+  design:
+    - Describe data flow across CLI or React, sidecar, desktop services, and domain packages when applicable.
+    - Explain persistence or catalog precedence changes.
+  tasks:
+    - Pair implementation tasks with focused tests and a final relevant quality-gate task.
+
+operations:
+  apply:
+    guidance:
+      - Enumerate applicable test files and run focused tests before the full relevant gate.
+      - Keep generated build outputs out of source control.
+  archive:
+    guidance:
+      - Run openspec validate --all --strict --no-interactive before archiving.
