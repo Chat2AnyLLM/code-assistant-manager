@@ -21,8 +21,12 @@ func (a *App) lifecycleCommand(name, alias string) *cobra.Command {
 		force   bool
 	)
 	title := strings.ToTitle(name[:1]) + name[1:]
+	use := name + " [TARGET]"
+	if name == "upgrade" {
+		use = name + " [TARGET[,TARGET...]]"
+	}
 	cmd := &cobra.Command{
-		Use:     name + " [TARGET]",
+		Use:     use,
 		Aliases: []string{alias},
 		Short:   title + " tools",
 		Args:    cobra.MaximumNArgs(1),
@@ -35,7 +39,12 @@ func (a *App) lifecycleCommand(name, alias string) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			candidates, err := pickTargets(registry, target)
+			var candidates []tools.Tool
+			if name == "upgrade" {
+				candidates, err = pickUpgradeTargets(registry, target)
+			} else {
+				candidates, err = pickTargets(registry, target)
+			}
 			if err != nil {
 				return err
 			}
@@ -104,6 +113,38 @@ func ifVerbose(out interface{ Write(p []byte) (int, error) }, verbose bool) inte
 type discardWriter struct{}
 
 func (discardWriter) Write(p []byte) (int, error) { return len(p), nil }
+
+func pickUpgradeTargets(registry *tools.Registry, targetList string) ([]tools.Tool, error) {
+	targets := strings.Split(targetList, ",")
+	for i, target := range targets {
+		targets[i] = strings.TrimSpace(target)
+		if targets[i] == "" {
+			return nil, errors.New("Invalid target list: empty target")
+		}
+	}
+	if len(targets) == 1 {
+		return pickTargets(registry, targets[0])
+	}
+
+	seen := make(map[string]struct{}, len(targets))
+	candidates := make([]tools.Tool, 0, len(targets))
+	for _, target := range targets {
+		if target == "all" {
+			return nil, errors.New("Invalid target list: all must be used alone")
+		}
+		resolved, err := pickTargets(registry, target)
+		if err != nil {
+			return nil, err
+		}
+		tool := resolved[0]
+		if _, ok := seen[tool.Name]; ok {
+			continue
+		}
+		seen[tool.Name] = struct{}{}
+		candidates = append(candidates, tool)
+	}
+	return candidates, nil
+}
 
 func pickTargets(registry *tools.Registry, target string) ([]tools.Tool, error) {
 	if target == "all" {

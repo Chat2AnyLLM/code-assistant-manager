@@ -237,13 +237,21 @@ Marketplace extensions for supported assistants (GitHub repos or local paths).
 | `cam skill` | `s` | Install and manage skill collections |
 | `cam plugin` | `pl` | Manage marketplace extensions (plugins) |
 | `cam mcp` | `m` | Manage MCP servers (add, remove, list, install) |
-| `cam upgrade [TARGET]` | `u` | Upgrade tools (default: all) with parallel execution |
+| `cam upgrade [TARGET[,TARGET...]]` | `u` | Upgrade one, several comma-separated, or all tools (default: all) |
 | `cam install [TARGET]` | `i` | Alias for upgrade |
 | `cam uninstall [TARGET]` | `un` | Uninstall tools and backup configurations |
 | `cam config` | `cf` | Manage CAM's internal configuration files |
 | `cam version` | `v` | Display current version |
 
 Note: non-boolean CLI options are long-form only. For example, use `--config` and `--scope` (not `-c` or `-s`).
+
+Upgrade one tool, selected tools in order, or every enabled tool:
+
+```bash
+cam upgrade codex
+cam upgrade codex,claude
+cam upgrade all
+```
 
 ---
 
