@@ -1,26 +1,4 @@
-# CAM CLI Specification
-
-## Purpose
-
-Define the public behavior of the Code Assistant Manager command-line interface.
-
-## Requirements
-
-### Requirement: Unified command entry point
-
-The system SHALL expose the `cam` command as the primary entry point for managing supported coding assistants and SHALL preserve `code-agent-manager` as a compatibility binary backed by the same application logic.
-
-#### Scenario: Invoke a management command
-
-- **GIVEN** a supported CAM management command
-- **WHEN** a user invokes it through `cam`
-- **THEN** the Cobra application in the shared CLI package handles the command
-
-#### Scenario: Invoke the compatibility binary
-
-- **GIVEN** the compatibility binary is installed
-- **WHEN** a user invokes `code-agent-manager`
-- **THEN** it executes the same CLI application behavior as `cam`
+## MODIFIED Requirements
 
 ### Requirement: Supported command families
 
@@ -36,121 +14,56 @@ The CLI SHALL provide command families for launch and apply workflows, diagnosti
 - **WHEN** a user requests `cam snapshot --help`
 - **THEN** the CLI displays the create, list, show, diff, and restore operations
 
-### Requirement: Canonical option naming
-
-The CLI SHALL use long-form option names as the canonical form in documentation and new interfaces while preserving existing shorthand compatibility.
-
-#### Scenario: Document a value option
-
-- **GIVEN** an option accepts a value such as a config path or scope
-- **WHEN** it is documented for users
-- **THEN** the documentation uses its long name such as `--config` or `--scope`
+## ADDED Requirements
 
 ### Requirement: Snapshot scope and selector options
-
 The snapshot CLI SHALL use long-form `--scope`, `--project-dir`, `--agent`, `--name`, and `--format` options as its canonical interface. `--agent` SHALL be repeatable, scope values SHALL be `user`, `project`, or `all`, and project or all scope SHALL require `--project-dir`.
 
 #### Scenario: Select two agents
-
 - **WHEN** a user creates a snapshot with `--agent claude --agent cursor`
 - **THEN** only canonical targets owned by those agents are selected
 
 #### Scenario: Select all scopes
-
 - **WHEN** a user creates a snapshot with `--scope all --project-dir .`
 - **THEN** both user targets and targets for the normalized project directory are selected
 
 #### Scenario: Reject an invalid scope
-
 - **WHEN** a user supplies a scope other than user, project, or all
 - **THEN** the command fails before snapshot discovery or persistence
 
 ### Requirement: Snapshot command output formats
-
 Snapshot list, show, diff, and restore planning SHALL provide human-readable text by default and SHALL accept `--format json` for stable machine-readable output. Unsupported format values MUST fail before performing mutations.
 
 #### Scenario: Request JSON diff
-
 - **WHEN** a user runs snapshot diff with `--format json`
 - **THEN** standard output contains one valid JSON result and no human-only decorations
 
 #### Scenario: Reject unsupported output format
-
 - **WHEN** a user supplies an unsupported format to restore
 - **THEN** restore fails before confirmation or live-state mutation
 
 ### Requirement: Scriptable snapshot diff status
-
 The CLI SHALL exit with status 0 when snapshot diff finds no drift, status 1 when it successfully finds drift, and status 2 when the diff cannot be completed because of invalid input, corruption, target access, or another operational error.
 
 #### Scenario: Diff is clean
-
 - **WHEN** snapshot diff completes and finds no drift
 - **THEN** the process exits with status 0
 
 #### Scenario: Diff finds drift
-
 - **WHEN** snapshot diff completes and finds one or more drift entries
 - **THEN** the process renders the result and exits with status 1
 
 #### Scenario: Diff encounters an operational failure
-
 - **WHEN** snapshot diff cannot load, verify, resolve, or compare the requested snapshot
 - **THEN** the process reports the error and exits with status 2
 
 ### Requirement: Explicit restore authorization options
-
 The restore CLI SHALL expose `--dry-run`, `--yes`, and `--exact`. It SHALL accept an optional `--project-dir` for portable project snapshots and SHALL not expose a force option that bypasses integrity or path-safety validation.
 
 #### Scenario: Automate an exact restore
-
 - **WHEN** a user invokes restore with `--exact --yes`
 - **THEN** the CLI may apply both replacement and deletion actions without interactive confirmation after all validations pass
 
 #### Scenario: Integrity checks cannot be bypassed
-
 - **WHEN** a snapshot is corrupt and the user supplies all restore authorization options
 - **THEN** restore still fails before changing live state
-
-### Requirement: Upgrade target selection
-
-The CLI SHALL allow `cam upgrade` to select one tool, all enabled tools, or multiple tools expressed as a comma-separated list in the single optional target argument. Each selected tool SHALL be resolved from either its registry key or CLI command alias and SHALL be upgraded at most once in the order of first occurrence.
-
-#### Scenario: Upgrade multiple aliases
-
-- **WHEN** a user runs `cam upgrade codex,claude`
-- **THEN** the CLI upgrades the tools resolved from `codex` and `claude` in that order
-
-#### Scenario: Deduplicate resolved tools
-
-- **WHEN** a user names the same tool more than once using a registry key, a CLI command alias, or both
-- **THEN** the CLI includes that tool once at its first position in the target list
-
-#### Scenario: Preserve single-target behavior
-
-- **WHEN** a user supplies one valid registry key or CLI command alias
-- **THEN** the CLI upgrades that one resolved tool
-
-#### Scenario: Preserve default and all-target behavior
-
-- **WHEN** a user omits the target argument or supplies `all` as the sole target
-- **THEN** the CLI upgrades every enabled tool
-
-### Requirement: Upgrade target list validation
-
-The CLI MUST validate the complete comma-separated upgrade target list before starting any upgrade operation. Every list entry MUST be non-empty and resolve to a known tool, and the reserved `all` selector MUST be used alone.
-
-#### Scenario: Reject an unknown target atomically
-
-- **WHEN** a comma-separated target list contains an unknown tool
-- **THEN** the command fails with an error identifying that target and performs no upgrade operations
-
-#### Scenario: Reject an empty target
-
-- **WHEN** a comma-separated target list contains an empty entry
-- **THEN** the command fails with an invalid target list error and performs no upgrade operations
-
-#### Scenario: Reject all mixed with named targets
-
-- **WHEN** a target list combines `all` with one or more named tools
-- **THEN** the command fails with an invalid target list error and performs no upgrade operations

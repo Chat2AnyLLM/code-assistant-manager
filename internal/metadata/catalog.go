@@ -101,10 +101,10 @@ func parseCatalogMarkdown(content, relPath string, kind entities.Kind) []Discove
 			}
 			seen[key] = true
 			res := DiscoveredResource{
-				Name:        name,
-				Description: desc,
-				RelPath:     relPath,
-				ManifestRel: relPath,
+				Name:           name,
+				Description:    desc,
+				RelPath:        relPath,
+				ManifestRel:    relPath,
 				InstallKeyName: catalogInstallKeyName(name, source),
 			}
 			// Attribute the row to its real source repo when the name link points

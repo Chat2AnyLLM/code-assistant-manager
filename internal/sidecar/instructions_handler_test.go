@@ -165,5 +165,3 @@ func TestInstructionTargetsEndpoint(t *testing.T) {
 		t.Fatalf("copilot supports = %+v", byApp["copilot"])
 	}
 }
-
-

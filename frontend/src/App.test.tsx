@@ -51,7 +51,10 @@ describe('App shell', () => {
   })
 
   it('switches the UI language between English and Chinese', async () => {
-    try { localStorage.removeItem('cam.lang') } catch { /* ignore */ }
+    try {
+      localStorage.removeItem('cam.lang')
+      localStorage.setItem('cam.route', 'agents')
+    } catch { /* ignore */ }
     const user = userEvent.setup()
     render(<App />, { wrapper: TestWrapper })
     // Defaults to English: the agents nav button reads "Agents".
