@@ -39,17 +39,17 @@ const (
 
 // Entity is the canonical representation stored on disk.
 type Entity struct {
-	Kind        Kind           `json:"kind"`
-	Name        string         `json:"name"`
-	Description string         `json:"description,omitempty"`
-	Content     string         `json:"content,omitempty"`
-	Path        string         `json:"path,omitempty"`
-	Repo        *RepoRef       `json:"repo,omitempty"`
-	Apps        []string       `json:"apps,omitempty"`
-	Tags        []string       `json:"tags,omitempty"`
-	Metadata    map[string]any `json:"metadata,omitempty"`
+	Kind        Kind              `json:"kind"`
+	Name        string            `json:"name"`
+	Description string            `json:"description,omitempty"`
+	Content     string            `json:"content,omitempty"`
+	Path        string            `json:"path,omitempty"`
+	Repo        *RepoRef          `json:"repo,omitempty"`
+	Apps        []string          `json:"apps,omitempty"`
+	Tags        []string          `json:"tags,omitempty"`
+	Metadata    map[string]any    `json:"metadata,omitempty"`
 	ExtraFiles  map[string]string `json:"extra_files,omitempty"` // relpath → content for additional files (e.g. references/)
-	UpdatedAt   time.Time      `json:"updated_at"`
+	UpdatedAt   time.Time         `json:"updated_at"`
 }
 
 // RepoRef points at the upstream source for fetched entities.

@@ -6,25 +6,30 @@ import (
 	"io"
 	"os"
 
+	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
 )
 
-// Options configures App.  Empty Stdout/Stderr default to os.Stdout/os.Stderr;
+// Options configures App. Empty Stdout/Stderr default to os.Stdout/os.Stderr;
 // an empty Stdin defaults to os.Stdin; an empty Version defaults to "dev".
+// Interactive overrides terminal detection when non-nil, primarily for embedders
+// and tests that provide a non-file input stream.
 type Options struct {
-	Version string
-	Stdout  io.Writer
-	Stderr  io.Writer
-	Stdin   io.Reader
+	Version     string
+	Stdout      io.Writer
+	Stderr      io.Writer
+	Stdin       io.Reader
+	Interactive *bool
 }
 
 // App is the top-level CLI entrypoint.  Construct one with New, then call
 // Run with the process args (excluding argv[0]).
 type App struct {
-	version string
-	stdout  io.Writer
-	stderr  io.Writer
-	stdin   io.Reader
+	version     string
+	stdout      io.Writer
+	stderr      io.Writer
+	stdin       io.Reader
+	interactive bool
 }
 
 // New constructs an App from Options.
@@ -41,7 +46,13 @@ func New(opts Options) *App {
 	if opts.Stdin == nil {
 		opts.Stdin = os.Stdin
 	}
-	return &App{version: opts.Version, stdout: opts.Stdout, stderr: opts.Stderr, stdin: opts.Stdin}
+	interactive := false
+	if opts.Interactive != nil {
+		interactive = *opts.Interactive
+	} else if file, ok := opts.Stdin.(*os.File); ok {
+		interactive = isatty.IsTerminal(file.Fd()) || isatty.IsCygwinTerminal(file.Fd())
+	}
+	return &App{version: opts.Version, stdout: opts.Stdout, stderr: opts.Stderr, stdin: opts.Stdin, interactive: interactive}
 }
 
 // Run executes the CLI and returns the process exit code.  errEndpointsHandled
@@ -60,6 +71,13 @@ func (a *App) Run(args []string) int {
 		if errors.Is(err, errEndpointsHandled) {
 			return 0
 		}
+		var statusErr *exitStatusError
+		if errors.As(err, &statusErr) {
+			if statusErr.err != nil {
+				fmt.Fprintln(a.stderr, statusErr.err.Error())
+			}
+			return statusErr.code
+		}
 		fmt.Fprintln(a.stderr, err.Error())
 		return 1
 	}
@@ -72,7 +90,7 @@ func (a *App) rootCommand() *cobra.Command {
 		Use:   "cam",
 		Short: "Code Assistant Manager",
 		Long: "Code Assistant Manager (CAM) manages AI coding assistant configuration, instructions, " +
-			"skills, plugins, MCP servers, and launch commands.\n\n" +
+			"skills, plugins, MCP servers, snapshots, and launch commands.\n\n" +
 			"Aliases: launch/l, doctor/d, agent/ag, instruction/prompt/p, skill/s, plugin/pl, mcp/m, " +
 			"provider/pr, upgrade/u, install/i, uninstall/un, config/cf, completion/comp/c, version/v.",
 		Version: a.version,
@@ -103,6 +121,7 @@ func (a *App) rootCommand() *cobra.Command {
 	root.AddCommand(a.managementCommand("plugin", "pl", state))
 	root.AddCommand(a.mcpCommand(state))
 	root.AddCommand(a.metadataCommand(state))
+	root.AddCommand(a.snapshotCommand())
 	root.AddCommand(a.extensionsCommand())
 	root.AddCommand(a.lifecycleCommand("upgrade", "u"))
 	root.AddCommand(a.lifecycleCommand("install", "i"))

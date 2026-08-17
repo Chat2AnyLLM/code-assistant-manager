@@ -2,18 +2,18 @@ package metadata
 
 // Item represents a single searchable/installable metadata record.
 type Item struct {
-	ID               int64  `json:"id"`
-	Kind             string `json:"kind"`
-	Name             string `json:"name"`
-	Description      string `json:"description"`
-	SourceID         int64  `json:"source_id"`
-	RepoOwner        string `json:"repo_owner"`
-	RepoName         string `json:"repo_name"`
-	RepoBranch       string `json:"repo_branch"`
-	ItemPath         string `json:"item_path"`
-	InstallKey       string `json:"install_key"`
-	TargetApps       string `json:"target_apps"`
-	MetadataJSON     string `json:"metadata_json"`
+	ID               int64    `json:"id"`
+	Kind             string   `json:"kind"`
+	Name             string   `json:"name"`
+	Description      string   `json:"description"`
+	SourceID         int64    `json:"source_id"`
+	RepoOwner        string   `json:"repo_owner"`
+	RepoName         string   `json:"repo_name"`
+	RepoBranch       string   `json:"repo_branch"`
+	ItemPath         string   `json:"item_path"`
+	InstallKey       string   `json:"install_key"`
+	TargetApps       string   `json:"target_apps"`
+	MetadataJSON     string   `json:"metadata_json"`
 	Installed        bool     `json:"installed"`
 	InstalledTargets string   `json:"installed_targets"`
 	InstalledApps    []string `json:"installed_apps,omitempty"`
@@ -51,10 +51,10 @@ type SearchQuery struct {
 
 // SearchResponse is a paginated search result set.
 type SearchResponse struct {
-	Items []Item `json:"items"`
-	Total int    `json:"total"`
-	Limit int    `json:"limit"`
-	Offset int   `json:"offset"`
+	Items  []Item `json:"items"`
+	Total  int    `json:"total"`
+	Limit  int    `json:"limit"`
+	Offset int    `json:"offset"`
 }
 
 // RefreshSummary reports the result of a refresh operation.
